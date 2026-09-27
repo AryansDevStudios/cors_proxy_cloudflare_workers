@@ -1,0 +1,10 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cors-proxy",
+  "main": "worker.js",
+  // Set this to today's date when you first deploy, then leave it alone.
+  "compatibility_date": "2026-09-27",
+  "observability": {
+    "enabled": true
+  }
+}
