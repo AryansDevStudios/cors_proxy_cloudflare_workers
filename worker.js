@@ -217,20 +217,41 @@ async function safeFetch(targetUrl, init = {}, redirectsLeft = MAX_REDIRECTS) {
 // Strips control characters (including CR/LF) so a crafted filename can't
 // inject extra header lines into the Content-Disposition value.
 function sanitizeFilename(name) {
-  return name.replace(/[\x00-\x1F\x7F]/g, '').trim();
+  return name.replace(/[\x00-\x1F\x7F]/g, '').replace(/[\\/]/g, '_').trim();
+}
+
+function filenameFromDisposition(disposition) {
+  const parameters = new Map();
+  const parameterPattern = /(?:^|;)\s*filename(\*)?\s*=\s*(?:"((?:\\.|[^"])*)"|([^;]*))/gi;
+  let match;
+
+  while ((match = parameterPattern.exec(disposition))) {
+    const key = match[1] ? 'filename*' : 'filename';
+    const value = (match[2] ?? match[3] ?? '').trim().replace(/\\(.)/g, '$1');
+    if (!parameters.has(key)) parameters.set(key, value);
+  }
+
+  const extended = parameters.get('filename*');
+  if (extended) {
+    const extendedMatch = extended.match(/^([^']*)'[^']*'(.*)$/);
+    if (extendedMatch) {
+      try {
+        if (/^utf-8$/i.test(extendedMatch[1])) return decodeURIComponent(extendedMatch[2]);
+        if (/^iso-8859-1$/i.test(extendedMatch[1])) {
+          return extendedMatch[2].replace(/%([0-9a-f]{2})/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+        }
+      } catch {
+        // Fall back to the regular filename parameter if extended decoding fails.
+      }
+    }
+  }
+
+  return parameters.get('filename') || null;
 }
 
 function guessFilename(originalUrl, upstreamResponse, filenameParam) {
   const disposition = upstreamResponse.headers.get('content-disposition') || '';
-  const cdMatch = disposition.match(/filename\*?=(?:UTF-8'')?"?([^;"]+)"?/i);
-  let headerFilename = null;
-  if (cdMatch && cdMatch[1]) {
-    try {
-      headerFilename = decodeURIComponent(cdMatch[1]);
-    } catch {
-      headerFilename = cdMatch[1];
-    }
-  }
+  const headerFilename = filenameFromDisposition(disposition);
 
   let urlFilename = '';
   try {
@@ -251,9 +272,11 @@ function guessFilename(originalUrl, upstreamResponse, filenameParam) {
 }
 
 function buildContentDisposition(filename) {
-  const safe = filename.replace(/"/g, '\\"');
-  const encoded = encodeURIComponent(filename).replace(/'/g, '%27');
-  return `attachment; filename="${safe}"; filename*=UTF-8''${encoded}`;
+  const fallback = filename.replace(/[^\x20-\x7E]/g, '_').replace(/["\\]/g, '\\$&');
+  const encoded = encodeURIComponent(filename).replace(/[!'()*]/g, (char) =>
+    `%${char.charCodeAt(0).toString(16).toUpperCase()}`
+  );
+  return `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`;
 }
 
 // Forwards a handful of upstream headers that matter for correctness:
@@ -364,6 +387,16 @@ const HTML_PAGE = `<!DOCTYPE html>
     color: var(--muted);
     margin: 16px 0 6px;
   }
+  .checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .checkbox-label input {
+    width: auto;
+    padding: 0;
+    accent-color: var(--accent);
+  }
   input, textarea {
     width: 100%;
     background: #0b1013;
@@ -427,6 +460,8 @@ const HTML_PAGE = `<!DOCTYPE html>
   <label for="filename">Filename (optional)</label>
   <input type="text" id="filename" placeholder="report.pdf" />
 
+  <label class="checkbox-label"><input type="checkbox" id="download" checked /> Send as a download</label>
+
   <div class="row">
     <button class="primary" id="convert-btn">Generate link</button>
     <button id="paste-btn">Paste</button>
@@ -443,6 +478,7 @@ const HTML_PAGE = `<!DOCTYPE html>
 <script>
   const input = document.getElementById('input-url');
   const filenameInput = document.getElementById('filename');
+  const downloadInput = document.getElementById('download');
   const output = document.getElementById('output-url');
   const toast = document.getElementById('toast');
 
@@ -456,9 +492,11 @@ const HTML_PAGE = `<!DOCTYPE html>
     const url = input.value.trim();
     if (!url) return showToast('Enter a URL first');
     const filename = filenameInput.value.trim();
-    let proxied = window.location.origin + '/proxy?url=' + encodeURIComponent(url);
-    if (filename) proxied += '&filename=' + encodeURIComponent(filename);
-    output.value = proxied;
+    const proxied = new URL('/proxy', window.location.origin);
+    proxied.searchParams.set('url', url);
+    if (filename) proxied.searchParams.set('filename', filename);
+    if (!downloadInput.checked) proxied.searchParams.set('download', '0');
+    output.value = proxied.toString();
     showToast('Link generated');
   });
 
@@ -490,6 +528,7 @@ async function handleProxy(request, ctx) {
   const reqUrl = new URL(request.url);
   const originalUrl = reqUrl.searchParams.get('url');
   const filenameParam = reqUrl.searchParams.get('filename');
+  const forceDownload = reqUrl.searchParams.get('download') !== '0';
 
   if (!originalUrl) {
     return new Response('Missing url parameter', { status: 400, headers: corsHeaders() });
@@ -549,10 +588,10 @@ async function handleProxy(request, ctx) {
   const filename = guessFilename(originalUrl, upstream, filenameParam);
   const sharedHeaders = {
     'Content-Type': upstream.headers.get('content-type') || 'application/octet-stream',
-    'Content-Disposition': buildContentDisposition(filename),
     'Cache-Control': `public, max-age=${CACHE_TTL_SECONDS}`,
     ...buildPassthroughHeaders(upstream),
   };
+  if (forceDownload) sharedHeaders['Content-Disposition'] = buildContentDisposition(filename);
 
   if (!upstream.body) {
     return new Response(null, { status: upstream.status, headers: { ...sharedHeaders, ...corsHeaders() } });
