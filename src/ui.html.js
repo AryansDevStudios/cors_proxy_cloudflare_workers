@@ -780,8 +780,9 @@ export const HTML_PAGE = `<!DOCTYPE html>
                 </select>
               </div>
               <div>
-                <label for="hmac-secret">Secret Key (HMAC / AES-256)</label>
-                <input type="password" id="hmac-secret" placeholder="Your secret key..." />
+                <label for="hmac-secret">Secret Key (Optional Override)</label>
+                <input type="password" id="hmac-secret" placeholder="Auto-uses server secret key (leave blank)" />
+                <div class="field-hint">Leave blank to automatically use server key</div>
               </div>
             </div>
           </div>
@@ -985,11 +986,6 @@ export const HTML_PAGE = `<!DOCTYPE html>
     btnFormatEncrypted.className = 'segmented-btn active encrypted-active';
     btnFormatStandard.className = 'segmented-btn';
     linkFormatDesc.innerHTML = '🔒 <strong>Encrypted Opaque Link</strong>: Stateless AES-256-GCM token (<code style="color:var(--cyan);">/s/...</code>). Origin URL and all modifiers are completely sealed &amp; tamper-proof.';
-    if (!hmacSecret.value.trim()) {
-      if (advancedDetails) advancedDetails.open = true;
-      hmacSecret.focus();
-      showToast('Enter Secret Key in Security options to generate token');
-    }
     updateLiveProxy();
   });
 
@@ -1116,17 +1112,7 @@ export const HTML_PAGE = `<!DOCTYPE html>
     if (activeLinkFormat === 'encrypted') {
       const secret = hmacSecret.value.trim();
       metaPillEncrypted.style.display = 'inline-block';
-
-      if (!secret) {
-        outputUrl.value = '⚠️ Please enter a Secret Key in Security options on the left to generate an encrypted token.';
-        metaPillEncrypted.textContent = '🔒 Key Required';
-        metaPillEncrypted.className = 'meta-pill';
-        updateCodeSnippets('');
-        saveFormToLocalStorage();
-        return;
-      }
-
-      metaPillEncrypted.textContent = '🔒 AES-256 Opaque';
+      metaPillEncrypted.textContent = secret ? '🔒 AES-256 (Custom Key)' : '🔒 AES-256 Server Key';
       metaPillEncrypted.className = 'meta-pill highlight';
 
       const payload = { url: rawUrl };
@@ -1177,11 +1163,29 @@ export const HTML_PAGE = `<!DOCTYPE html>
       }
 
       try {
-        const token = await computeAesGcmToken(payload, secret);
-        const opaqueUrl = window.location.origin + '/s/' + token;
-        outputUrl.value = opaqueUrl;
-        updateCodeSnippets(opaqueUrl);
-        saveFormToLocalStorage();
+        if (secret) {
+          const token = await computeAesGcmToken(payload, secret);
+          const opaqueUrl = window.location.origin + '/s/' + token;
+          outputUrl.value = opaqueUrl;
+          updateCodeSnippets(opaqueUrl);
+          saveFormToLocalStorage();
+        } else {
+          // Automatic server-side encryption via Worker's stored ENCRYPTION_KEY
+          const res = await fetch('/encrypt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            outputUrl.value = data.encryptedUrl;
+            updateCodeSnippets(data.encryptedUrl);
+            saveFormToLocalStorage();
+          } else {
+            const errText = await res.text();
+            outputUrl.value = '⚠️ Server encryption error: ' + errText;
+          }
+        }
       } catch (err) {
         console.error('Encryption error:', err);
       }
