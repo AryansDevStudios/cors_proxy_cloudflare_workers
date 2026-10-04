@@ -469,6 +469,77 @@ export const HTML_PAGE = `<!DOCTYPE html>
       </div>
     </details>
 
+    <!-- Accordion: On-the-Fly Image Resizing -->
+    <details>
+      <summary>On-the-Fly Image Resizing & Format Conversion</summary>
+      <div class="details-body">
+        <div class="row-2">
+          <div>
+            <label for="img-width">Width (px)</label>
+            <input type="number" id="img-width" placeholder="e.g. 800 (optional)" min="1" />
+          </div>
+          <div>
+            <label for="img-height">Height (px)</label>
+            <input type="number" id="img-height" placeholder="e.g. 600 (optional)" min="1" />
+          </div>
+        </div>
+
+        <div class="row-2">
+          <div>
+            <label for="img-fit">Fit Mode</label>
+            <select id="img-fit">
+              <option value="scale-down">scale-down (Preserve aspect, downscale only)</option>
+              <option value="cover">cover (Crop to cover dimensions)</option>
+              <option value="contain">contain (Fit entirely inside dimensions)</option>
+              <option value="crop">crop (Extract exact bounds)</option>
+              <option value="pad">pad (Pad canvas with background)</option>
+            </select>
+          </div>
+          <div>
+            <label for="img-format">Output Format</label>
+            <select id="img-format">
+              <option value="">Auto (Original format)</option>
+              <option value="webp">WebP (High efficiency)</option>
+              <option value="avif">AVIF (Next-gen compression)</option>
+              <option value="jpeg">JPEG</option>
+              <option value="png">PNG</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row-2">
+          <div>
+            <label for="img-quality">Quality (1-100)</label>
+            <input type="number" id="img-quality" placeholder="85" min="1" max="100" />
+          </div>
+          <div>
+            <label for="img-blur">Blur (0-250)</label>
+            <input type="number" id="img-blur" placeholder="0 (No blur)" min="0" max="250" />
+          </div>
+        </div>
+
+        <div class="row-2">
+          <div>
+            <label for="img-rotate">Rotate</label>
+            <select id="img-rotate">
+              <option value="">0° (No rotation)</option>
+              <option value="90">90°</option>
+              <option value="180">180°</option>
+              <option value="270">270°</option>
+            </select>
+          </div>
+          <div>
+            <label for="img-engine">Resizing Engine</label>
+            <select id="img-engine">
+              <option value="auto">Auto (Cloudflare cf.image + wsrv.nl fallback)</option>
+              <option value="cf">Cloudflare Native Edge (cf.image)</option>
+              <option value="wsrv">wsrv.nl Edge Engine</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </details>
+
     <!-- Accordion 3: Security, HMAC Signing & Caching -->
     <details>
       <summary>Security, HMAC Signed Links & Caching</summary>
@@ -617,6 +688,15 @@ export const HTML_PAGE = `<!DOCTYPE html>
   const hmacExpiry = document.getElementById('hmac-expiry');
   const hmacSecret = document.getElementById('hmac-secret');
 
+  const imgWidth = document.getElementById('img-width');
+  const imgHeight = document.getElementById('img-height');
+  const imgFit = document.getElementById('img-fit');
+  const imgFormat = document.getElementById('img-format');
+  const imgQuality = document.getElementById('img-quality');
+  const imgBlur = document.getElementById('img-blur');
+  const imgRotate = document.getElementById('img-rotate');
+  const imgEngine = document.getElementById('img-engine');
+
   const outputCard = document.getElementById('output-card');
   const outputUrl = document.getElementById('output-url');
   const codeCurl = document.getElementById('code-curl');
@@ -736,6 +816,18 @@ export const HTML_PAGE = `<!DOCTYPE html>
 
     if (cacheTtl.value !== '86400') proxied.searchParams.set('cache_ttl', cacheTtl.value);
     if (allowedOrigin.value.trim()) proxied.searchParams.set('allowed_origin', allowedOrigin.value.trim());
+
+    // Image Resizing Options
+    if (imgWidth.value.trim()) proxied.searchParams.set('w', imgWidth.value.trim());
+    if (imgHeight.value.trim()) proxied.searchParams.set('h', imgHeight.value.trim());
+    if (imgWidth.value.trim() || imgHeight.value.trim()) {
+      if (imgFit.value) proxied.searchParams.set('fit', imgFit.value);
+    }
+    if (imgFormat.value) proxied.searchParams.set('format', imgFormat.value);
+    if (imgQuality.value.trim()) proxied.searchParams.set('q', imgQuality.value.trim());
+    if (imgBlur.value.trim() && imgBlur.value.trim() !== '0') proxied.searchParams.set('blur', imgBlur.value.trim());
+    if (imgRotate.value) proxied.searchParams.set('rotate', imgRotate.value);
+    if (imgEngine.value !== 'auto') proxied.searchParams.set('image_engine', imgEngine.value);
 
     // HMAC Signing
     const expirySec = hmacExpiry.value;

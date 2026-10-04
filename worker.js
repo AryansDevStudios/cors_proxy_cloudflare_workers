@@ -49,6 +49,7 @@ import {
   applyHtmlRewriter,
   isTextualMime,
 } from './src/transforms.js';
+import { parseImageResizeOptions, fetchResizedImage } from './src/images.js';
 import { HTML_PAGE } from './src/ui.html.js';
 
 const DEFAULT_CACHE_TTL = 86400; // 1 day
@@ -230,15 +231,29 @@ async function handleProxy(request, env, ctx) {
     upstreamHeaders['Range'] = rangeHeader.startsWith('bytes=') ? rangeHeader : `bytes=${rangeHeader}`;
   }
 
-  // 8. Fetch from Upstream with Smart Resolvers & Fallback
+  // 8. Fetch from Upstream with Smart Resolvers & Fallback (or Image Resizer)
+  const imageResizeOptions = parseImageResizeOptions(reqUrl.searchParams);
   let fetchResult;
   try {
-    fetchResult = await fetchWithPlatformAndFallback({
-      primaryUrl: originalUrl,
-      fallbackUrl,
-      method: request.method === 'HEAD' ? 'HEAD' : 'GET',
-      headers: upstreamHeaders,
-    });
+    if (imageResizeOptions) {
+      const resizeResult = await fetchResizedImage({
+        targetUrl: originalUrl,
+        options: imageResizeOptions,
+        headers: upstreamHeaders,
+      });
+      fetchResult = {
+        response: resizeResult.response,
+        source: 'primary',
+        platform: `Image Resizer (${resizeResult.engineUsed})`,
+      };
+    } else {
+      fetchResult = await fetchWithPlatformAndFallback({
+        primaryUrl: originalUrl,
+        fallbackUrl,
+        method: request.method === 'HEAD' ? 'HEAD' : 'GET',
+        headers: upstreamHeaders,
+      });
+    }
   } catch (err) {
     const status = err.message.includes('not allowed') || err.message.includes('blocked') ? 403 : 502;
     return new Response(`Upstream fetch failed: ${err.message}`, { status, headers: responseCors });
@@ -254,7 +269,10 @@ async function handleProxy(request, env, ctx) {
   }
 
   // 9. Build Response Headers
-  const contentType = typeOverride || upstream.headers.get('content-type') || 'application/octet-stream';
+  let contentType = typeOverride || upstream.headers.get('content-type') || 'application/octet-stream';
+  if (imageResizeOptions?.format) {
+    contentType = `image/${imageResizeOptions.format === 'jpg' ? 'jpeg' : imageResizeOptions.format}`;
+  }
   const filename = guessFilename(originalUrl, upstream, filenameParam);
 
   const sharedHeaders = {
@@ -263,6 +281,7 @@ async function handleProxy(request, env, ctx) {
     'X-Proxy-Source': source,
     ...buildPassthroughHeaders(upstream),
   };
+  if (imageResizeOptions) sharedHeaders['X-Proxy-Image-Resized'] = 'true';
   if (platform) sharedHeaders['X-Proxy-Platform'] = platform;
   if (primaryStatus) sharedHeaders['X-Proxy-Primary-Status'] = String(primaryStatus);
   if (cacheTtl > 0) sharedHeaders['X-Cache-TTL'] = String(cacheTtl);

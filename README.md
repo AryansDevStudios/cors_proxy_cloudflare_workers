@@ -28,6 +28,7 @@ Built with pure Web standard APIs (Streams, Web Crypto, Fetch) and Cloudflare ed
 
 ### 2. Edge Streaming Transformations
 - **On-the-Fly Compression / Decompression**: Uses edge `CompressionStream` and `DecompressionStream` Web APIs (`?compress=gzip|deflate`, `?decompress=gzip|deflate|1`) without buffering the full payload into memory.
+- **On-the-Fly Image Resizing & Conversion**: Resize, crop, convert formats (WebP, AVIF, JPEG, PNG), adjust quality, blur, and rotate images on the fly via `?w=800&h=600&fit=cover&format=webp&q=85&blur=5&rotate=90`. Utilizes Cloudflare Native Image Resizing (`cf.image`) with automatic edge fallback (`wsrv.nl`).
 - **Range & Partial Content Slicing**: Full support for `Range` and `Content-Range` headers (status `206 Partial Content`), allowing clients to pause/resume multi-gigabyte downloads and stream video/audio chunk by chunk. Slices streams on the fly even if the origin server does not natively support byte ranges.
 - **Stream Find-and-Replace & HTML Injection**: For textual assets (`text/*`, `application/json`, `application/javascript`, `application/xml`), performs streaming regex replacements (`?replace_from=...&replace_to=...`) and CSS/JS tag injection via `HTMLRewriter` (`?inject_css=...`, `?inject_js=...`).
 
@@ -80,9 +81,10 @@ cors_proxy_cloudflare_workers/
 │   ├── resolvers.js          # Smart unwrappers (GDrive, Dropbox, Box, OneDrive, GitHub, GitLab, fallback)
 │   ├── headers.js            # Custom headers, MIME/disposition overrides, Referer/Origin spoofing
 │   ├── transforms.js         # Edge Compression/Decompression, Range slicer, text find-replace, HTMLRewriter
+│   ├── images.js             # On-the-fly Image Resizing (Cloudflare cf.image + wsrv.nl edge fallback)
 │   └── ui.html.js            # Modern Web Dashboard, snippet generator, and live header inspector
 ├── test/
-│   └── proxy.test.js         # Automated test suite (10 test suites covering all features)
+│   └── proxy.test.js         # Automated test suite (11 test suites covering all features)
 └── README.md                 # Complete documentation & reference
 ```
 
@@ -112,6 +114,14 @@ cors_proxy_cloudflare_workers/
 | `allowed_origin`| string | Locks proxy response to a specific embedding origin. | `?allowed_origin=https://mysite.com` |
 | `cache_ttl` | number | Cache lifetime in seconds (or `0` to bypass edge cache). | `?cache_ttl=3600` |
 | `persist_r2` | string | `1` to read/write persistent snapshots to Cloudflare R2. | `?persist_r2=1` |
+| `w` / `width` | number | On-the-fly target image width in pixels. | `?w=800` |
+| `h` / `height` | number | On-the-fly target image height in pixels. | `?h=600` |
+| `fit` | string | Image fit: `scale-down`, `cover`, `contain`, `crop`, `pad`. | `?fit=cover` |
+| `format` / `output` | string | Converts format to `webp`, `avif`, `jpeg`, or `png`. | `?format=webp` |
+| `q` / `quality` | number | Image quality compression level (1-100). | `?q=85` |
+| `blur` | number | Blur radius (1-250). | `?blur=5` |
+| `rotate` | number | Rotates image degrees (`90`, `180`, `270`). | `?rotate=90` |
+| `image_engine` | string | Force engine: `auto` (default), `cf`, or `wsrv`. | `?image_engine=auto` |
 
 ---
 

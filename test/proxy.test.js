@@ -37,6 +37,12 @@ import {
   isTextualMime,
 } from '../src/transforms.js';
 
+import {
+  parseImageResizeOptions,
+  buildCfImageOptions,
+  buildWsrvUrl,
+} from '../src/images.js';
+
 import worker from '../worker.js';
 
 test('SSRF Protection — IP parsing and CIDR detection', () => {
@@ -279,3 +285,44 @@ test('HMAC Signing Endpoint (/sign)', async () => {
   assert.ok(postData.signedUrl.includes('archive.zip'));
   assert.ok(postData.sig);
 });
+
+test('Edge Image Resizing — Options parsing and URL builder', () => {
+  // Parsing parameters
+  const params = new URLSearchParams('w=640&h=480&fit=cover&q=85&format=webp&blur=10&rotate=90&image_engine=auto');
+  const opts = parseImageResizeOptions(params);
+  assert.equal(opts.width, 640);
+  assert.equal(opts.height, 480);
+  assert.equal(opts.fit, 'cover');
+  assert.equal(opts.quality, 85);
+  assert.equal(opts.format, 'webp');
+  assert.equal(opts.blur, 10);
+  assert.equal(opts.rotate, 90);
+  assert.equal(opts.engine, 'auto');
+
+  // Cloudflare cf.image options builder
+  const cfOpts = buildCfImageOptions(opts);
+  assert.equal(cfOpts.width, 640);
+  assert.equal(cfOpts.height, 480);
+  assert.equal(cfOpts.fit, 'cover');
+  assert.equal(cfOpts.quality, 85);
+  assert.equal(cfOpts.format, 'webp');
+  assert.equal(cfOpts.blur, 10);
+  assert.equal(cfOpts.rotate, 90);
+
+  // wsrv.nl URL builder
+  const wsrvUrl = buildWsrvUrl('https://example.com/photo.jpg', opts);
+  assert.ok(wsrvUrl.startsWith('https://wsrv.nl/?'));
+  assert.ok(wsrvUrl.includes('url=https%3A%2F%2Fexample.com%2Fphoto.jpg'));
+  assert.ok(wsrvUrl.includes('w=640'));
+  assert.ok(wsrvUrl.includes('h=480'));
+  assert.ok(wsrvUrl.includes('fit=cover'));
+  assert.ok(wsrvUrl.includes('q=85'));
+  assert.ok(wsrvUrl.includes('output=webp'));
+  assert.ok(wsrvUrl.includes('blur=10'));
+  assert.ok(wsrvUrl.includes('ro=90'));
+
+  // Non-image request returns null
+  const nonImage = parseImageResizeOptions(new URLSearchParams('url=https://example.com/file.txt'));
+  assert.equal(nonImage, null);
+});
+
