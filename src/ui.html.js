@@ -1194,73 +1194,72 @@ export const HTML_PAGE = `<!DOCTYPE html>
       if (metaPillEncrypted) metaPillEncrypted.style.display = 'none';
     }
 
-    const proxied = new URL('/proxy', window.location.origin);
-    proxied.searchParams.set('url', rawUrl);
+    const modParams = new URLSearchParams();
 
     if (activeDeliveryMode === 'inline') {
-      proxied.searchParams.set('disposition', 'inline');
+      modParams.set('disposition', 'inline');
     }
 
     if (filenameInput.value.trim()) {
-      proxied.searchParams.set('filename', filenameInput.value.trim());
+      modParams.set('filename', filenameInput.value.trim());
     }
 
     // Advanced options
     if (fallbackUrl.value.trim()) {
-      proxied.searchParams.set('fallback', fallbackUrl.value.trim());
+      modParams.set('fallback', fallbackUrl.value.trim());
     }
 
     if (mimeOverride.value.trim()) {
-      proxied.searchParams.set('type', mimeOverride.value.trim());
+      modParams.set('type', mimeOverride.value.trim());
     }
 
     if (refererMode.value === 'strip') {
-      proxied.searchParams.set('referer', 'strip');
+      modParams.set('referer', 'strip');
     } else if (refererMode.value === 'custom' && customReferer.value.trim()) {
-      proxied.searchParams.set('referer', customReferer.value.trim());
+      modParams.set('referer', customReferer.value.trim());
     }
 
     if (customHeaders.value.trim()) {
       try {
         JSON.parse(customHeaders.value.trim());
-        proxied.searchParams.set('headers', customHeaders.value.trim());
+        modParams.set('headers', customHeaders.value.trim());
       } catch {
         // do not break on intermediate typing
       }
     }
 
     if (compressMode.value !== 'none') {
-      proxied.searchParams.set('compress', compressMode.value);
+      modParams.set('compress', compressMode.value);
     }
 
     if (replaceFrom.value.trim()) {
-      proxied.searchParams.set('replace_from', replaceFrom.value.trim());
-      proxied.searchParams.set('replace_to', replaceTo.value);
+      modParams.set('replace_from', replaceFrom.value.trim());
+      modParams.set('replace_to', replaceTo.value);
     }
 
     if (cacheTtl.value !== '86400') {
-      proxied.searchParams.set('cache_ttl', cacheTtl.value);
+      modParams.set('cache_ttl', cacheTtl.value);
       metaPillCache.textContent = cacheTtl.value === '0' ? 'Cache: Bypass' : 'TTL: ' + cacheTtl.value + 's';
     } else {
       metaPillCache.textContent = 'TTL: 1 Day';
     }
 
     if (allowedOrigin.value.trim()) {
-      proxied.searchParams.set('allowed_origin', allowedOrigin.value.trim());
+      modParams.set('allowed_origin', allowedOrigin.value.trim());
     }
 
     // Image resizing options
     let hasImageResize = false;
-    if (imgWidth.value.trim()) { proxied.searchParams.set('w', imgWidth.value.trim()); hasImageResize = true; }
-    if (imgHeight.value.trim()) { proxied.searchParams.set('h', imgHeight.value.trim()); hasImageResize = true; }
+    if (imgWidth.value.trim()) { modParams.set('w', imgWidth.value.trim()); hasImageResize = true; }
+    if (imgHeight.value.trim()) { modParams.set('h', imgHeight.value.trim()); hasImageResize = true; }
     if (imgWidth.value.trim() || imgHeight.value.trim()) {
-      if (imgFit.value) proxied.searchParams.set('fit', imgFit.value);
+      if (imgFit.value) modParams.set('fit', imgFit.value);
     }
-    if (imgFormat.value) { proxied.searchParams.set('format', imgFormat.value); hasImageResize = true; }
-    if (imgQuality.value.trim()) { proxied.searchParams.set('q', imgQuality.value.trim()); hasImageResize = true; }
-    if (imgBlur.value.trim() && imgBlur.value.trim() !== '0') { proxied.searchParams.set('blur', imgBlur.value.trim()); hasImageResize = true; }
-    if (imgRotate.value) { proxied.searchParams.set('rotate', imgRotate.value); hasImageResize = true; }
-    if (imgEngine.value !== 'auto') { proxied.searchParams.set('image_engine', imgEngine.value); }
+    if (imgFormat.value) { modParams.set('format', imgFormat.value); hasImageResize = true; }
+    if (imgQuality.value.trim()) { modParams.set('q', imgQuality.value.trim()); hasImageResize = true; }
+    if (imgBlur.value.trim() && imgBlur.value.trim() !== '0') { modParams.set('blur', imgBlur.value.trim()); hasImageResize = true; }
+    if (imgRotate.value) { modParams.set('rotate', imgRotate.value); hasImageResize = true; }
+    if (imgEngine.value !== 'auto') { modParams.set('image_engine', imgEngine.value); }
 
     if (hasImageResize) {
       metaPillImage.style.display = 'inline-block';
@@ -1279,19 +1278,23 @@ export const HTML_PAGE = `<!DOCTYPE html>
     const secret = hmacSecret.value.trim();
     if (expirySec !== 'none') {
       const expires = Math.floor(Date.now() / 1000) + parseInt(expirySec, 10);
-      proxied.searchParams.set('expires', expires.toString());
+      modParams.set('expires', expires.toString());
       if (secret) {
         try {
-          const canonical = buildCanonicalQuery(proxied);
+          const canonical = buildCanonicalQuery(new URL(window.location.origin + '/' + rawUrl + '?' + modParams.toString()));
           const sig = await computeHmacSignature(secret, canonical);
-          proxied.searchParams.set('sig', sig);
+          modParams.set('sig', sig);
         } catch (e) {
           console.warn('HMAC error:', e);
         }
       }
     }
 
-    const finalUrl = proxied.toString();
+    const qs = modParams.toString();
+    let finalUrl = window.location.origin + '/' + rawUrl;
+    if (qs) {
+      finalUrl += (finalUrl.includes('?') ? '&' : '?') + qs;
+    }
     outputUrl.value = finalUrl;
     updateCodeSnippets(finalUrl);
     saveFormToLocalStorage();

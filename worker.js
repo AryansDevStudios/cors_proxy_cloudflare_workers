@@ -54,6 +54,44 @@ import { HTML_PAGE } from './src/ui.html.js';
 
 const DEFAULT_CACHE_TTL = 86400; // 1 day
 
+const PROXY_MODIFIER_KEYS = new Set([
+  'url',
+  'disposition',
+  'download',
+  'filename',
+  'fallback',
+  'mirror',
+  'type',
+  'content_type',
+  'mime',
+  'headers',
+  'referer',
+  'origin',
+  'compress',
+  'decompress',
+  'replace_from',
+  'replace_to',
+  'replace_flags',
+  'inject_css',
+  'inject_js',
+  'allowed_origin',
+  'cache_ttl',
+  'ttl',
+  'persist_r2',
+  'sig',
+  'expires',
+  'token',
+  't',
+  'w',
+  'h',
+  'fit',
+  'q',
+  'format',
+  'blur',
+  'rotate',
+  'image_engine',
+]);
+
 /**
  * Checks whether client Origin or Referer matches the allowed origin requirement.
  */
@@ -131,7 +169,36 @@ async function handleProxy(request, env, ctx, tokenParam = null) {
     }
   }
 
-  const originalUrl = effectiveParams.get('url');
+  let originalUrl = effectiveParams.get('url');
+
+  // Support clean path-based URLs: e.g. /https://example.com/file.jpg or /http://... or /example.com/...
+  if (!originalUrl) {
+    const rawPath = reqUrl.pathname.slice(1);
+    const match = rawPath.match(/^(https?):?\/?\/?(.*)$/i);
+    if (match) {
+      const protocol = match[1].toLowerCase();
+      const rest = match[2];
+      const baseTarget = protocol + '://' + rest;
+      const targetParams = new URLSearchParams();
+      for (const [k, v] of reqUrl.searchParams.entries()) {
+        if (!PROXY_MODIFIER_KEYS.has(k.toLowerCase())) {
+          targetParams.append(k, v);
+        }
+      }
+      const qs = targetParams.toString();
+      originalUrl = qs ? (baseTarget + (baseTarget.includes('?') ? '&' : '?') + qs) : baseTarget;
+    } else if (/^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(\/.*)?$/.test(rawPath)) {
+      const baseTarget = 'https://' + rawPath;
+      const targetParams = new URLSearchParams();
+      for (const [k, v] of reqUrl.searchParams.entries()) {
+        if (!PROXY_MODIFIER_KEYS.has(k.toLowerCase())) {
+          targetParams.append(k, v);
+        }
+      }
+      const qs = targetParams.toString();
+      originalUrl = qs ? (baseTarget + (baseTarget.includes('?') ? '&' : '?') + qs) : baseTarget;
+    }
+  }
   const fallbackUrl = effectiveParams.get('fallback') || effectiveParams.get('mirror');
   const filenameParam = effectiveParams.get('filename');
   const dispositionParam = effectiveParams.get('disposition');
@@ -625,8 +692,16 @@ export default {
         return await handleProxy(request, env, ctx, token);
       }
 
-      // 6. Main Proxy Endpoint
-      if (url.pathname === '/proxy') {
+      // 6. Main Proxy Endpoint (/proxy or clean path: /https://... or /http://... or /domain.com/...)
+      const pathSegment = url.pathname.slice(1);
+      const isCleanProxyPath = url.pathname.startsWith('/http://') ||
+                               url.pathname.startsWith('/https://') ||
+                               url.pathname.startsWith('/http:/') ||
+                               url.pathname.startsWith('/https:/') ||
+                               (/^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(\/.*)?$/.test(pathSegment) &&
+                                !['proxy', 'encrypt', 'sign', 'inspect', 's', 'favicon.ico', 'robots.txt'].includes(pathSegment.split('/')[0]));
+
+      if (url.pathname === '/proxy' || isCleanProxyPath) {
         if (request.method !== 'GET' && request.method !== 'HEAD') {
           return new Response('Method not allowed', { status: 405, headers: corsHeaders() });
         }

@@ -236,10 +236,16 @@ test('Worker routing and options preflight', async () => {
   const badRes = await worker.fetch(badReq, {}, {});
   assert.equal(badRes.status, 400);
 
-  // SSRF blocked host
+  // SSRF blocked host (legacy /proxy?url=)
   const ssrfReq = new Request('https://worker.test/proxy?url=http://127.0.0.1:8080/secret', { method: 'GET' });
   const ssrfRes = await worker.fetch(ssrfReq, {}, {});
   assert.equal(ssrfRes.status, 403);
+
+  // Clean direct path proxying (/https://...)
+  const cleanSsrfReq = new Request('https://worker.test/http://127.0.0.1:8080/secret?disposition=inline', { method: 'GET' });
+  const cleanSsrfRes = await worker.fetch(cleanSsrfReq, {}, {});
+  assert.equal(cleanSsrfRes.status, 403);
+  assert.ok((await cleanSsrfRes.text()).includes('Security error: This host is not allowed'));
 });
 
 test('Security Gate — Origin Whitelist and Token Gate', async () => {
