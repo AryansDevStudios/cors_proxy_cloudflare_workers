@@ -497,7 +497,7 @@ export const HTML_PAGE = `<!DOCTYPE html>
     <div class="title-row">
       <h1>Universal CORS Proxy</h1>
       <div class="badges">
-        <span class="live-pill"><span class="pulse-dot"></span> REAL-TIME SYNC</span>
+        <span class="live-pill" title="Options are auto-saved to browser cache"><span class="pulse-dot"></span> AUTO-SAVED</span>
         <span class="badge">Edge Streams</span>
         <span class="badge green">Web Crypto</span>
         <span class="badge cyan">Image Engine</span>
@@ -512,7 +512,10 @@ export const HTML_PAGE = `<!DOCTYPE html>
       <h2 class="card-title">
         <span>Target Source URL</span>
       </h2>
-      <span id="detected-platform" class="badge cyan" style="display:none;"></span>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span id="detected-platform" class="badge cyan" style="display:none;"></span>
+        <button id="reset-btn" type="button" style="padding:4px 10px; font-size:0.75rem; background:transparent;" title="Reset all form options and clear cached state">🔄 Reset Form</button>
+      </div>
     </div>
 
     <!-- Primary Source URL Input -->
@@ -1021,6 +1024,7 @@ export const HTML_PAGE = `<!DOCTYPE html>
     const finalUrl = proxied.toString();
     outputUrl.value = finalUrl;
     updateCodeSnippets(finalUrl);
+    saveFormToLocalStorage();
   }
 
   function updateCodeSnippets(finalUrl) {
@@ -1190,7 +1194,147 @@ print(f"Downloaded: {filename}")\`;
     }
   });
 
-  // Initialize on load
+  // LocalStorage Form Cache
+  const STORAGE_KEY = 'cors_proxy_form_cache_v1';
+  const advancedDetails = document.getElementById('advanced-details');
+
+  function saveFormToLocalStorage() {
+    try {
+      const data = {
+        url: inputUrl.value,
+        deliveryMode: activeDeliveryMode,
+        filename: filenameInput.value,
+        fallbackUrl: fallbackUrl.value,
+        imgWidth: imgWidth.value,
+        imgHeight: imgHeight.value,
+        imgFit: imgFit.value,
+        imgFormat: imgFormat.value,
+        imgQuality: imgQuality.value,
+        imgBlur: imgBlur.value,
+        imgRotate: imgRotate.value,
+        imgEngine: imgEngine.value,
+        refererMode: refererMode.value,
+        customReferer: customReferer.value,
+        customHeaders: customHeaders.value,
+        mimeOverride: mimeOverride.value,
+        compressMode: compressMode.value,
+        replaceFrom: replaceFrom.value,
+        replaceTo: replaceTo.value,
+        cacheTtl: cacheTtl.value,
+        allowedOrigin: allowedOrigin.value,
+        hmacExpiry: hmacExpiry.value,
+        hmacSecret: hmacSecret.value,
+        advancedOpen: advancedDetails ? advancedDetails.open : false,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch (err) {
+      // LocalStorage might be restricted
+    }
+  }
+
+  function loadFormFromLocalStorage() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return false;
+      const data = JSON.parse(raw);
+      if (!data || typeof data !== 'object') return false;
+
+      if (data.url !== undefined) inputUrl.value = data.url;
+      if (data.filename !== undefined) filenameInput.value = data.filename;
+      if (data.fallbackUrl !== undefined) fallbackUrl.value = data.fallbackUrl;
+
+      if (data.deliveryMode === 'inline') {
+        activeDeliveryMode = 'inline';
+        btnModeInline.className = 'segmented-btn active inline-active';
+        btnModeDownload.className = 'segmented-btn';
+        deliveryDesc.textContent = 'Sets Content-Disposition: inline to render natively in browser.';
+      } else {
+        activeDeliveryMode = 'attachment';
+        btnModeDownload.className = 'segmented-btn active download-active';
+        btnModeInline.className = 'segmented-btn';
+        deliveryDesc.textContent = 'Forces Content-Disposition: attachment for downloads.';
+      }
+
+      if (data.imgWidth !== undefined) imgWidth.value = data.imgWidth;
+      if (data.imgHeight !== undefined) imgHeight.value = data.imgHeight;
+      if (data.imgFit !== undefined) imgFit.value = data.imgFit;
+      if (data.imgFormat !== undefined) imgFormat.value = data.imgFormat;
+      if (data.imgQuality !== undefined) imgQuality.value = data.imgQuality;
+      if (data.imgBlur !== undefined) imgBlur.value = data.imgBlur;
+      if (data.imgRotate !== undefined) imgRotate.value = data.imgRotate;
+      if (data.imgEngine !== undefined) imgEngine.value = data.imgEngine;
+
+      if (data.refererMode !== undefined) {
+        refererMode.value = data.refererMode;
+        customReferer.disabled = data.refererMode !== 'custom';
+      }
+      if (data.customReferer !== undefined) customReferer.value = data.customReferer;
+      if (data.customHeaders !== undefined) customHeaders.value = data.customHeaders;
+      if (data.mimeOverride !== undefined) mimeOverride.value = data.mimeOverride;
+      if (data.compressMode !== undefined) compressMode.value = data.compressMode;
+      if (data.replaceFrom !== undefined) replaceFrom.value = data.replaceFrom;
+      if (data.replaceTo !== undefined) replaceTo.value = data.replaceTo;
+      if (data.cacheTtl !== undefined) cacheTtl.value = data.cacheTtl;
+      if (data.allowedOrigin !== undefined) allowedOrigin.value = data.allowedOrigin;
+      if (data.hmacExpiry !== undefined) hmacExpiry.value = data.hmacExpiry;
+      if (data.hmacSecret !== undefined) hmacSecret.value = data.hmacSecret;
+
+      if (data.advancedOpen && advancedDetails) {
+        advancedDetails.open = true;
+      }
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function resetForm() {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (err) {}
+
+    inputUrl.value = '';
+    filenameInput.value = '';
+    fallbackUrl.value = '';
+    activeDeliveryMode = 'attachment';
+    btnModeDownload.className = 'segmented-btn active download-active';
+    btnModeInline.className = 'segmented-btn';
+    deliveryDesc.textContent = 'Forces Content-Disposition: attachment for downloads.';
+
+    imgWidth.value = '';
+    imgHeight.value = '';
+    imgFit.value = 'scale-down';
+    imgFormat.value = '';
+    imgQuality.value = '';
+    imgBlur.value = '';
+    imgRotate.value = '';
+    imgEngine.value = 'auto';
+
+    refererMode.value = 'auto';
+    customReferer.value = '';
+    customReferer.disabled = true;
+    customHeaders.value = '';
+    mimeOverride.value = '';
+    compressMode.value = 'none';
+    replaceFrom.value = '';
+    replaceTo.value = '';
+    cacheTtl.value = '86400';
+    allowedOrigin.value = '';
+    hmacExpiry.value = 'none';
+    hmacSecret.value = '';
+
+    if (advancedDetails) advancedDetails.open = false;
+
+    updateLiveProxy();
+    showToast('Form reset to default');
+  }
+
+  const resetBtn = document.getElementById('reset-btn');
+  if (resetBtn) resetBtn.addEventListener('click', resetForm);
+  if (advancedDetails) advancedDetails.addEventListener('toggle', saveFormToLocalStorage);
+
+  // Initialize: restore cached options and sync live proxy
+  loadFormFromLocalStorage();
   updateLiveProxy();
 </script>
 </body>
