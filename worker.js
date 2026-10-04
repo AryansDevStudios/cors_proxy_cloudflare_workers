@@ -90,6 +90,17 @@ const PROXY_MODIFIER_KEYS = new Set([
   'blur',
   'rotate',
   'image_engine',
+  'sharpen',
+  'sharp',
+  'filter',
+  'filt',
+  'flip',
+  'flop',
+  'mirror',
+  'mask',
+  'background',
+  'bg',
+  'dpr',
 ]);
 
 /**

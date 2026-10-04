@@ -123,27 +123,76 @@ cors_proxy_cloudflare_workers/
 | `format` / `output` | string | Converts format to `webp`, `avif`, `jpeg`, or `png`. | `?format=webp` |
 | `q` / `quality` | number | Image quality compression level (1-100). | `?q=85` |
 | `blur` | number | Blur radius (1-250). | `?blur=5` |
+| `sharpen` / `sharp` | number | Sharpness clarity filter (0 to 10). | `?sharpen=3` |
 | `rotate` | number | Rotates image degrees (`90`, `180`, `270`). | `?rotate=90` |
+| `filter` / `filt` | string | Color & artistic filter: `grayscale`, `sepia`, `negate`. | `?filter=grayscale` |
+| `flip` | boolean | Flips image vertically (`true`). | `?flip=true` |
+| `flop` | boolean | Mirrors image horizontally (`true`). | `?flop=true` |
+| `mask` | string | Crops image with mask shape: `circle`. | `?mask=circle` |
+| `background` / `bg` | string | Canvas background fill color for padded mode (hex or name). | `?bg=ffffff` |
+| `dpr` | number | Device Pixel Ratio scaling for Retina screens (`1`, `2`, `3`). | `?dpr=2` |
 | `image_engine` | string | Force engine: `auto` (default), `cf`, or `wsrv`. | `?image_engine=auto` |
 | `t` | string | **Stateless AES-256-GCM Opaque Token**. Conceals target URL, modifiers & headers. | `?t=nvC2omhz...` or `/s/nvC2omhz...` |
 
 ---
 
+## 🌐 Address Routing Formats
+
+This worker supports 3 distinct address styles:
+
+### 1. Clean Direct Path (Recommended)
+Prepend the worker domain directly to any target URL:
+```bash
+https://<your-worker>.workers.dev/https://example.com/photo.jpg?disposition=inline
+```
+
+### 2. Opaque Encrypted Token (AES-256-GCM)
+Conceal both the origin destination and all visual modifiers (blur, rotate, headers) inside a tamper-proof cryptographic token:
+```bash
+https://<your-worker>.workers.dev/s/<token>
+```
+
+### 3. Legacy Query Parameter
+Standard query string syntax for backwards compatibility:
+```bash
+https://<your-worker>.workers.dev/proxy?url=https%3A%2F%2Fexample.com%2Fphoto.jpg
+```
+
+---
+
+## 🔒 HTTP to HTTPS & Mixed-Content Solution
+
+Modern web browsers enforce strict **Mixed Content** blocking: an HTTPS webpage is forbidden from loading insecure `http://` images, scripts, or API endpoints.
+
+This worker acts as an edge bridge:
+1. Your browser calls the worker securely over **HTTPS**:
+   `https://<your-worker>.workers.dev/http://insecure-api.com/data.json`
+2. The Cloudflare Worker edge connects to the upstream HTTP server directly.
+3. The response is streamed back over secure HTTPS with full CORS headers (`Access-Control-Allow-Origin: *`).
+4. Result: Zero mixed-content blocks, zero browser security warnings.
+
+---
+
 ## 💡 Practical Examples
 
-### 1. Basic Fetch (Browser Inline Preview)
+### 1. Basic Fetch (Clean Direct Path with Inline Preview)
 ```bash
-curl "https://<your-worker>.workers.dev/proxy?url=https://example.com/document.pdf&disposition=inline"
+curl "https://<your-worker>.workers.dev/https://example.com/document.pdf?disposition=inline"
 ```
 
 ### 2. Download with Custom Filename
 ```bash
-curl "https://<your-worker>.workers.dev/proxy?url=https://example.com/raw-report&disposition=attachment&filename=final-report.pdf"
+curl "https://<your-worker>.workers.dev/https://example.com/raw-report?disposition=attachment&filename=final-report.pdf"
 ```
 
-### 3. On-the-Fly Image Resizing (Convert to WebP)
+### 3. Image Resizing, Grayscale Filter & Circular Crop
 ```bash
-curl "https://<your-worker>.workers.dev/proxy?url=https://example.com/photo.jpg&w=800&h=600&fit=cover&format=webp&q=85"
+curl "https://<your-worker>.workers.dev/https://example.com/avatar.jpg?w=300&h=300&fit=cover&filter=grayscale&mask=circle&format=webp"
+```
+
+### 4. Fetch Plain HTTP Resource on HTTPS Site
+```bash
+curl "https://<your-worker>.workers.dev/http://insecure-api.com/items.json"
 ```
 
 ### 4. Fetch Behind Bearer Token Auth

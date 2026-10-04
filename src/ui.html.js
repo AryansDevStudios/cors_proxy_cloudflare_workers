@@ -549,6 +549,138 @@ export const HTML_PAGE = `<!DOCTYPE html>
     z-index: 200;
   }
   #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  /* Help Button & Modal */
+  .help-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(245, 158, 11, 0.12);
+    color: var(--accent);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    padding: 6px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .help-btn:hover {
+    background: var(--accent);
+    color: var(--accent-ink);
+    border-color: var(--accent);
+    transform: translateY(-1px);
+  }
+
+  #how-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.78);
+    backdrop-filter: blur(8px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+  }
+  #how-modal.show { display: flex; }
+  .how-card {
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-lg);
+    width: 100%;
+    max-width: 820px;
+    max-height: 88vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+    overflow: hidden;
+  }
+  .how-header {
+    padding: 16px 22px;
+    border-bottom: 1px solid var(--panel-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(255, 255, 255, 0.02);
+  }
+  .how-body {
+    padding: 22px;
+    overflow-y: auto;
+    font-size: 0.87rem;
+    color: var(--text);
+    line-height: 1.6;
+  }
+  .how-section {
+    margin-bottom: 20px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-md);
+    padding: 16px 18px;
+  }
+  .how-section-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .how-code-block {
+    background: #090d16;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    color: var(--cyan);
+    margin: 8px 0;
+    overflow-x: auto;
+    word-break: break-all;
+  }
+  .badge-tag {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .badge-tag.green { background: rgba(16, 185, 129, 0.15); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.3); }
+  .badge-tag.cyan { background: rgba(6, 182, 212, 0.15); color: var(--cyan); border: 1px solid rgba(6, 182, 212, 0.3); }
+  .badge-tag.amber { background: rgba(245, 158, 11, 0.15); color: var(--accent); border: 1px solid rgba(245, 158, 11, 0.3); }
+
+  /* Footer */
+  .app-footer {
+    margin-top: 36px;
+    padding-top: 20px;
+    border-top: 1px solid var(--panel-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.82rem;
+    color: var(--muted);
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .footer-links {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+  }
+  .github-link, .footer-link {
+    color: var(--muted);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: color 0.15s ease;
+    cursor: pointer;
+  }
+  .github-link:hover, .footer-link:hover {
+    color: var(--cyan);
+  }
 </style>
 </head>
 <body>
@@ -560,6 +692,7 @@ export const HTML_PAGE = `<!DOCTYPE html>
         <p class="subtitle">High-performance edge proxy with on-the-fly streaming transforms, image resizing, HMAC signing, and instant code generation.</p>
       </div>
       <div class="badge-cluster">
+        <button id="how-to-use-btn" class="help-btn" type="button">📖 How to Use</button>
         <span class="live-pill" title="Options are auto-saved to browser cache"><span class="pulse-dot"></span> AUTO-SAVED</span>
         <span class="badge">Edge Streams</span>
         <span class="badge green">Web Crypto</span>
@@ -693,6 +826,56 @@ export const HTML_PAGE = `<!DOCTYPE html>
                   <option value="auto">Auto (Cloudflare cf.image + wsrv.nl fallback)</option>
                   <option value="cf">Cloudflare Native Edge (cf.image)</option>
                   <option value="wsrv">wsrv.nl Edge Engine</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid-2">
+              <div>
+                <label for="img-filter">Visual Filter / Effect</label>
+                <select id="img-filter">
+                  <option value="">None (Normal)</option>
+                  <option value="grayscale">Grayscale (B&amp;W)</option>
+                  <option value="sepia">Sepia (Vintage)</option>
+                  <option value="negate">Invert / Negate</option>
+                </select>
+              </div>
+              <div>
+                <label for="img-sharpen">Sharpen (0-10)</label>
+                <input type="number" id="img-sharpen" placeholder="0 (No sharpening)" min="0" max="10" step="0.5" />
+              </div>
+            </div>
+
+            <div class="grid-2">
+              <div>
+                <label for="img-flip">Flip &amp; Mirror Orientation</label>
+                <select id="img-flip">
+                  <option value="">None (Normal)</option>
+                  <option value="flop">Horizontal Mirror (Flop)</option>
+                  <option value="flip">Vertical Flip</option>
+                  <option value="both">Both (Horizontal &amp; Vertical)</option>
+                </select>
+              </div>
+              <div>
+                <label for="img-mask">Mask / Shape Crop</label>
+                <select id="img-mask">
+                  <option value="">None (Standard bounds)</option>
+                  <option value="circle">Circular Avatar Crop</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid-2">
+              <div>
+                <label for="img-bg">Background / Canvas Color</label>
+                <input type="text" id="img-bg" placeholder="e.g. #ffffff or transparent" />
+              </div>
+              <div>
+                <label for="img-dpr">Device Pixel Ratio (DPR)</label>
+                <select id="img-dpr">
+                  <option value="">1x (Standard)</option>
+                  <option value="2">2x (Retina)</option>
+                  <option value="3">3x (Ultra-HD)</option>
                 </select>
               </div>
             </div>
@@ -866,6 +1049,21 @@ export const HTML_PAGE = `<!DOCTYPE html>
       </div>
     </div>
   </div>
+
+  <footer class="app-footer">
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+      <span><strong>Universal CORS Proxy</strong> &copy; 2026 AryansDevStudios</span>
+      <span>•</span>
+      <span>High-Performance Edge Worker</span>
+    </div>
+    <div class="footer-links">
+      <a href="https://github.com/AryansDevStudios/cors_proxy_cloudflare_workers" target="_blank" rel="noopener noreferrer" class="github-link">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub Repository
+      </a>
+      <button id="footer-how-btn" class="footer-link" type="button" style="background:none; border:none; padding:0; font-size:inherit;">📖 How to Use</button>
+    </div>
+  </footer>
 </div>
 
 <!-- Live Inspector Modal -->
@@ -915,6 +1113,92 @@ export const HTML_PAGE = `<!DOCTYPE html>
   </div>
 </div>
 
+<!-- Interactive 'How to Use' Modal -->
+<div id="how-modal">
+  <div class="how-card">
+    <div class="how-header">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <h3 style="margin:0; font-size:1.15rem; color:#fff;">📖 Quickstart &amp; Address Guide</h3>
+        <span class="badge-tag green">v1.2</span>
+      </div>
+      <button id="close-how-btn" type="button" style="padding:4px 12px; font-size:1.1rem; cursor:pointer;">&times; Close</button>
+    </div>
+    <div class="how-body">
+      <!-- Section 1: Address Options -->
+      <div class="how-section">
+        <div class="how-section-title">
+          <span>🌐 1. Address Formats</span>
+          <span class="badge-tag cyan">Clean &amp; Direct</span>
+        </div>
+        <p style="margin:4px 0 8px 0; color:var(--muted); font-size:0.84rem;">
+          You can use either clean direct paths or encrypted tokens depending on your privacy requirements:
+        </p>
+        <div style="font-weight:600; color:#fff;">Option A: Clean Direct Path (Recommended)</div>
+        <div style="font-size:0.8rem; color:var(--muted);">Simply prepend your CORS proxy domain to any destination URL:</div>
+        <div class="how-code-block">https://corsproxy.adsbackend01.workers.dev/https://example.com/photo.jpg?disposition=inline</div>
+
+        <div style="margin-top:12px; font-weight:600; color:#fff;">Option B: Opaque Encrypted Token (AES-256-GCM)</div>
+        <div style="font-size:0.8rem; color:var(--muted);">Completely conceals the origin URL and all visual modifiers inside a tamper-proof cryptographic token. Zero database required:</div>
+        <div class="how-code-block">https://corsproxy.adsbackend01.workers.dev/s/APbirUwbgzB3iZvmBMxhKWB1WOQtfa...</div>
+
+        <div style="margin-top:12px; font-weight:600; color:#fff;">Option C: Legacy URL Query</div>
+        <div style="font-size:0.8rem; color:var(--muted);">Standard query parameter format for backwards compatibility:</div>
+        <div class="how-code-block">https://corsproxy.adsbackend01.workers.dev/proxy?url=https%3A%2F%2Fexample.com%2Fphoto.jpg</div>
+      </div>
+
+      <!-- Section 2: Mixed Content & HTTP to HTTPS -->
+      <div class="how-section">
+        <div class="how-section-title">
+          <span>🔒 2. HTTP to HTTPS &amp; Mixed Content Solution</span>
+          <span class="badge-tag green">Bypass Browser Blocks</span>
+        </div>
+        <p style="margin:0 0 8px 0; color:var(--muted); font-size:0.84rem;">
+          Modern web browsers automatically block insecure HTTP assets when called from an HTTPS webpage (Mixed Content error). This proxy runs over HTTPS, connects to the HTTP source server on the edge, and delivers it securely to your browser:
+        </p>
+        <div class="how-code-block">https://corsproxy.adsbackend01.workers.dev/http://insecure-api.com/data.json</div>
+      </div>
+
+      <!-- Section 3: Visual Image Editing -->
+      <div class="how-section">
+        <div class="how-section-title">
+          <span>🎨 3. Edge Image Transformation Modifiers</span>
+          <span class="badge-tag amber">Cloudflare cf.image + wsrv.nl</span>
+        </div>
+        <p style="margin:0 0 8px 0; color:var(--muted); font-size:0.84rem;">
+          Append query modifiers to transform images in real time at edge CDN speed:
+        </p>
+        <ul style="margin:0; padding-left:20px; font-size:0.82rem; color:var(--muted); line-height:1.7;">
+          <li><code>w=800&amp;h=600</code>: Width and height dimensions in pixels</li>
+          <li><code>fit=cover|contain|scale-down|crop|pad</code>: Resizing fit mode</li>
+          <li><code>format=webp|avif|jpeg|png</code>: Next-gen compression formats</li>
+          <li><code>q=85</code>: Quality level (1 to 100)</li>
+          <li><code>blur=25</code>: Gaussian blur intensity (0 to 250)</li>
+          <li><code>sharpen=3</code>: Sharpening clarity filter (0 to 10)</li>
+          <li><code>rotate=90|180|270</code>: Angular rotation</li>
+          <li><code>filter=grayscale|sepia|negate</code>: Color and artistic filters</li>
+          <li><code>flip=true</code> / <code>flop=true</code>: Vertical flip and horizontal mirror</li>
+          <li><code>mask=circle</code>: Circular avatar crop</li>
+          <li><code>bg=%23ffffff</code>: Background fill color for padded canvas</li>
+          <li><code>dpr=2</code>: High-DPI / Retina display scaling</li>
+        </ul>
+      </div>
+
+      <!-- Section 4: Headers & Security -->
+      <div class="how-section" style="margin-bottom:0;">
+        <div class="how-section-title">
+          <span>🛡️ 4. Header Spoofing &amp; Delivery Control</span>
+        </div>
+        <ul style="margin:0; padding-left:20px; font-size:0.82rem; color:var(--muted); line-height:1.7;">
+          <li><code>disposition=inline</code>: Forces browser to render natively in browser tabs.</li>
+          <li><code>disposition=attachment&amp;filename=doc.pdf</code>: Triggers immediate download with custom UTF-8 filename.</li>
+          <li><code>referer=auto|strip|https://...</code>: Spoofs upstream referer to bypass anti-hotlinking protections.</li>
+          <li><code>cache_ttl=86400</code>: Custom Cloudflare edge cache duration in seconds.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -950,6 +1234,17 @@ export const HTML_PAGE = `<!DOCTYPE html>
   const imgBlur = document.getElementById('img-blur');
   const imgRotate = document.getElementById('img-rotate');
   const imgEngine = document.getElementById('img-engine');
+  const imgFilter = document.getElementById('img-filter');
+  const imgSharpen = document.getElementById('img-sharpen');
+  const imgFlip = document.getElementById('img-flip');
+  const imgMask = document.getElementById('img-mask');
+  const imgBg = document.getElementById('img-bg');
+  const imgDpr = document.getElementById('img-dpr');
+
+  const howToUseBtn = document.getElementById('how-to-use-btn');
+  const footerHowBtn = document.getElementById('footer-how-btn');
+  const closeHowBtn = document.getElementById('close-how-btn');
+  const howModal = document.getElementById('how-modal');
 
   const outputUrl = document.getElementById('output-url');
   const metaPillMode = document.getElementById('meta-pill-mode');
@@ -1143,7 +1438,15 @@ export const HTML_PAGE = `<!DOCTYPE html>
       if (imgFormat.value) { payload.format = imgFormat.value; hasImageResize = true; }
       if (imgQuality.value.trim()) { payload.q = imgQuality.value.trim(); hasImageResize = true; }
       if (imgBlur.value.trim() && imgBlur.value.trim() !== '0') { payload.blur = imgBlur.value.trim(); hasImageResize = true; }
+      if (imgSharpen.value.trim() && imgSharpen.value.trim() !== '0') { payload.sharpen = imgSharpen.value.trim(); hasImageResize = true; }
       if (imgRotate.value) { payload.rotate = imgRotate.value; hasImageResize = true; }
+      if (imgFilter.value) { payload.filter = imgFilter.value; hasImageResize = true; }
+      if (imgFlip.value === 'flip') { payload.flip = 'true'; hasImageResize = true; }
+      else if (imgFlip.value === 'flop') { payload.flop = 'true'; hasImageResize = true; }
+      else if (imgFlip.value === 'both') { payload.flip = 'true'; payload.flop = 'true'; hasImageResize = true; }
+      if (imgMask.value) { payload.mask = imgMask.value; hasImageResize = true; }
+      if (imgBg.value.trim()) { payload.bg = imgBg.value.trim(); hasImageResize = true; }
+      if (imgDpr.value) { payload.dpr = imgDpr.value; hasImageResize = true; }
       if (imgEngine.value !== 'auto') payload.image_engine = imgEngine.value;
 
       if (hasImageResize) {
@@ -1258,7 +1561,15 @@ export const HTML_PAGE = `<!DOCTYPE html>
     if (imgFormat.value) { modParams.set('format', imgFormat.value); hasImageResize = true; }
     if (imgQuality.value.trim()) { modParams.set('q', imgQuality.value.trim()); hasImageResize = true; }
     if (imgBlur.value.trim() && imgBlur.value.trim() !== '0') { modParams.set('blur', imgBlur.value.trim()); hasImageResize = true; }
+    if (imgSharpen.value.trim() && imgSharpen.value.trim() !== '0') { modParams.set('sharpen', imgSharpen.value.trim()); hasImageResize = true; }
     if (imgRotate.value) { modParams.set('rotate', imgRotate.value); hasImageResize = true; }
+    if (imgFilter.value) { modParams.set('filter', imgFilter.value); hasImageResize = true; }
+    if (imgFlip.value === 'flip') { modParams.set('flip', 'true'); hasImageResize = true; }
+    else if (imgFlip.value === 'flop') { modParams.set('flop', 'true'); hasImageResize = true; }
+    else if (imgFlip.value === 'both') { modParams.set('flip', 'true'); modParams.set('flop', 'true'); hasImageResize = true; }
+    if (imgMask.value) { modParams.set('mask', imgMask.value); hasImageResize = true; }
+    if (imgBg.value.trim()) { modParams.set('bg', imgBg.value.trim()); hasImageResize = true; }
+    if (imgDpr.value) { modParams.set('dpr', imgDpr.value); hasImageResize = true; }
     if (imgEngine.value !== 'auto') { modParams.set('image_engine', imgEngine.value); }
 
     if (hasImageResize) {
@@ -1348,7 +1659,8 @@ export const HTML_PAGE = `<!DOCTYPE html>
     refererMode, customReferer, customHeaders,
     mimeOverride, compressMode, replaceFrom, replaceTo,
     cacheTtl, allowedOrigin, hmacExpiry, hmacSecret,
-    imgWidth, imgHeight, imgFit, imgFormat, imgQuality, imgBlur, imgRotate, imgEngine
+    imgWidth, imgHeight, imgFit, imgFormat, imgQuality, imgBlur, imgRotate, imgEngine,
+    imgFilter, imgSharpen, imgFlip, imgMask, imgBg, imgDpr
   ];
 
   allInputs.forEach(el => {
@@ -1359,6 +1671,14 @@ export const HTML_PAGE = `<!DOCTYPE html>
     });
     el.addEventListener('change', updateLiveProxy);
   });
+
+  // How to Use Modal Handlers
+  const openHowModal = () => howModal && howModal.classList.add('show');
+  const closeHowModal = () => howModal && howModal.classList.remove('show');
+  if (howToUseBtn) howToUseBtn.addEventListener('click', openHowModal);
+  if (footerHowBtn) footerHowBtn.addEventListener('click', openHowModal);
+  if (closeHowBtn) closeHowBtn.addEventListener('click', closeHowModal);
+  if (howModal) howModal.addEventListener('click', (e) => { if (e.target === howModal) closeHowModal(); });
 
   // Paste Button
   document.getElementById('paste-btn').addEventListener('click', async () => {
@@ -1499,8 +1819,14 @@ export const HTML_PAGE = `<!DOCTYPE html>
         imgFormat: imgFormat.value,
         imgQuality: imgQuality.value,
         imgBlur: imgBlur.value,
+        imgSharpen: imgSharpen.value,
         imgRotate: imgRotate.value,
         imgEngine: imgEngine.value,
+        imgFilter: imgFilter.value,
+        imgFlip: imgFlip.value,
+        imgMask: imgMask.value,
+        imgBg: imgBg.value,
+        imgDpr: imgDpr.value,
         refererMode: refererMode.value,
         customReferer: customReferer.value,
         customHeaders: customHeaders.value,
@@ -1550,8 +1876,14 @@ export const HTML_PAGE = `<!DOCTYPE html>
       if (data.imgFormat !== undefined) imgFormat.value = data.imgFormat;
       if (data.imgQuality !== undefined) imgQuality.value = data.imgQuality;
       if (data.imgBlur !== undefined) imgBlur.value = data.imgBlur;
+      if (data.imgSharpen !== undefined) imgSharpen.value = data.imgSharpen;
       if (data.imgRotate !== undefined) imgRotate.value = data.imgRotate;
       if (data.imgEngine !== undefined) imgEngine.value = data.imgEngine;
+      if (data.imgFilter !== undefined) imgFilter.value = data.imgFilter;
+      if (data.imgFlip !== undefined) imgFlip.value = data.imgFlip;
+      if (data.imgMask !== undefined) imgMask.value = data.imgMask;
+      if (data.imgBg !== undefined) imgBg.value = data.imgBg;
+      if (data.imgDpr !== undefined) imgDpr.value = data.imgDpr;
 
       if (data.refererMode !== undefined) {
         refererMode.value = data.refererMode;
@@ -1608,8 +1940,14 @@ export const HTML_PAGE = `<!DOCTYPE html>
     imgFormat.value = '';
     imgQuality.value = '';
     imgBlur.value = '';
+    imgSharpen.value = '';
     imgRotate.value = '';
     imgEngine.value = 'auto';
+    imgFilter.value = '';
+    imgFlip.value = '';
+    imgMask.value = '';
+    imgBg.value = '';
+    imgDpr.value = '';
 
     refererMode.value = 'auto';
     customReferer.value = '';

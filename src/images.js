@@ -9,6 +9,7 @@ import { safeFetch } from './resolvers.js';
 
 const VALID_FIT_MODES = new Set(['scale-down', 'contain', 'cover', 'crop', 'pad']);
 const VALID_FORMATS = new Set(['webp', 'avif', 'jpeg', 'jpg', 'png', 'json']);
+const VALID_FILTERS = new Set(['grayscale', 'greyscale', 'sepia', 'negate']);
 
 /**
  * Extracts image resizing options from URL search parameters.
@@ -21,11 +22,17 @@ export function parseImageResizeOptions(searchParams) {
   const q = searchParams.get('quality') || searchParams.get('q');
   const format = searchParams.get('format') || searchParams.get('f') || searchParams.get('output');
   const blur = searchParams.get('blur');
-  const sharpen = searchParams.get('sharpen');
-  const rotate = searchParams.get('rotate');
+  const sharpen = searchParams.get('sharpen') || searchParams.get('sharp');
+  const rotate = searchParams.get('rotate') || searchParams.get('ro');
+  const filter = searchParams.get('filter') || searchParams.get('filt');
+  const flip = searchParams.get('flip');
+  const flop = searchParams.get('flop') || searchParams.get('mirror');
+  const mask = searchParams.get('mask');
+  const bg = searchParams.get('background') || searchParams.get('bg');
+  const dpr = searchParams.get('dpr');
   const engine = searchParams.get('image_engine') || 'auto';
 
-  if (!w && !h && !fit && !q && !format && !blur && !sharpen && !rotate) {
+  if (!w && !h && !fit && !q && !format && !blur && !sharpen && !rotate && !filter && !flip && !flop && !mask && !bg && !dpr) {
     return null;
   }
 
@@ -57,6 +64,24 @@ export function parseImageResizeOptions(searchParams) {
   if (rotate && [90, 180, 270].includes(parseInt(rotate, 10))) {
     options.rotate = parseInt(rotate, 10);
   }
+  if (filter && VALID_FILTERS.has(filter.toLowerCase())) {
+    options.filter = filter.toLowerCase() === 'greyscale' ? 'grayscale' : filter.toLowerCase();
+  }
+  if (flip === '1' || flip === 'true') {
+    options.flip = true;
+  }
+  if (flop === '1' || flop === 'true') {
+    options.flop = true;
+  }
+  if (mask && ['circle', 'rounded'].includes(mask.toLowerCase())) {
+    options.mask = mask.toLowerCase();
+  }
+  if (bg && /^[a-zA-Z0-9#]+$/.test(bg)) {
+    options.background = bg;
+  }
+  if (dpr && !isNaN(parseFloat(dpr))) {
+    options.dpr = Math.min(3, Math.max(1, parseFloat(dpr)));
+  }
 
   return options;
 }
@@ -74,6 +99,11 @@ export function buildCfImageOptions(options) {
   if (options.blur) cfOpts.blur = options.blur;
   if (options.sharpen) cfOpts.sharpen = options.sharpen;
   if (options.rotate) cfOpts.rotate = options.rotate;
+  if (options.background) cfOpts.background = options.background;
+  if (options.dpr) cfOpts.dpr = options.dpr;
+  if (options.filter === 'grayscale') cfOpts.saturation = 0;
+  if (options.flip) cfOpts.flip = true;
+  if (options.flop) cfOpts.flop = true;
   return cfOpts;
 }
 
@@ -99,7 +129,14 @@ export function buildWsrvUrl(targetUrl, options) {
   if (options.quality) urlObj.searchParams.set('q', options.quality.toString());
   if (options.format) urlObj.searchParams.set('output', options.format);
   if (options.blur) urlObj.searchParams.set('blur', options.blur.toString());
+  if (options.sharpen) urlObj.searchParams.set('sharp', options.sharpen.toString());
   if (options.rotate) urlObj.searchParams.set('ro', options.rotate.toString());
+  if (options.filter) urlObj.searchParams.set('filt', options.filter === 'grayscale' ? 'greyscale' : options.filter);
+  if (options.flip) urlObj.searchParams.set('flip', 'true');
+  if (options.flop) urlObj.searchParams.set('flop', 'true');
+  if (options.mask) urlObj.searchParams.set('mask', options.mask);
+  if (options.background) urlObj.searchParams.set('bg', options.background);
+  if (options.dpr) urlObj.searchParams.set('dpr', options.dpr.toString());
 
   return urlObj.toString();
 }

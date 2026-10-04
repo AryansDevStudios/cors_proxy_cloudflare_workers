@@ -343,6 +343,26 @@ test('Edge Image Resizing — Options parsing and URL builder', () => {
   assert.ok(wsrvUrl.includes('blur=10'));
   assert.ok(wsrvUrl.includes('ro=90'));
 
+  // Extended options: sharpen, filter, flip, mask, bg, dpr
+  const extParams = new URLSearchParams('sharp=3&filter=grayscale&flip=true&flop=true&mask=circle&bg=ffffff&dpr=2');
+  const extOpts = parseImageResizeOptions(extParams);
+  assert.equal(extOpts.sharpen, 3);
+  assert.equal(extOpts.filter, 'grayscale');
+  assert.equal(extOpts.flip, true);
+  assert.equal(extOpts.flop, true);
+  assert.equal(extOpts.mask, 'circle');
+  assert.equal(extOpts.background, 'ffffff');
+  assert.equal(extOpts.dpr, 2);
+
+  const extWsrv = buildWsrvUrl('https://example.com/photo.jpg', extOpts);
+  assert.ok(extWsrv.includes('sharp=3'));
+  assert.ok(extWsrv.includes('filt=greyscale'));
+  assert.ok(extWsrv.includes('flip=true'));
+  assert.ok(extWsrv.includes('flop=true'));
+  assert.ok(extWsrv.includes('mask=circle'));
+  assert.ok(extWsrv.includes('bg=ffffff'));
+  assert.ok(extWsrv.includes('dpr=2'));
+
   // Non-image request returns null
   const nonImage = parseImageResizeOptions(new URLSearchParams('url=https://example.com/file.txt'));
   assert.equal(nonImage, null);
