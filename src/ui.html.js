@@ -761,7 +761,7 @@ export const HTML_PAGE = `<!DOCTYPE html>
 
             <div class="grid-2">
               <div>
-                <label for="hmac-expiry">HMAC Link Expiration</label>
+                <label for="hmac-expiry">HMAC / Token Expiration</label>
                 <select id="hmac-expiry">
                   <option value="none">No Expiry (Open link)</option>
                   <option value="3600">Expires in 1 Hour</option>
@@ -770,8 +770,18 @@ export const HTML_PAGE = `<!DOCTYPE html>
                 </select>
               </div>
               <div>
-                <label for="hmac-secret">HMAC Secret Key</label>
-                <input type="password" id="hmac-secret" placeholder="Your HMAC secret key..." />
+                <label for="hmac-secret">Secret Key (HMAC / AES-256)</label>
+                <input type="password" id="hmac-secret" placeholder="Your secret key..." />
+              </div>
+            </div>
+
+            <div style="margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--panel-border);">
+              <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:600; color:#fff; user-select:none; margin:0;">
+                <input type="checkbox" id="token-opaque" style="width:auto; cursor:pointer; accent-color:var(--accent);" />
+                <span>🔒 Generate Opaque Encrypted Token (<code style="font-size:0.8rem; color:var(--cyan);">/s/...</code>)</span>
+              </label>
+              <div class="field-desc" style="margin-left: 24px; margin-top: 4px;">
+                Stateless AES-256-GCM encryption. Conceals target URL, blur, rotate, and all modifiers so recipients cannot inspect or alter parameters. Modifying any character fails verification (403 Forbidden). Requires Secret Key.
               </div>
             </div>
           </div>
@@ -802,6 +812,7 @@ export const HTML_PAGE = `<!DOCTYPE html>
           <span class="meta-pill" id="meta-pill-cache">TTL: 1 Day</span>
           <span class="meta-pill" id="meta-pill-platform" style="display:none;">Generic</span>
           <span class="meta-pill" id="meta-pill-image" style="display:none;">Image Resized</span>
+          <span class="meta-pill" id="meta-pill-encrypted" style="display:none;">🔒 Encrypted (AES-256)</span>
         </div>
 
         <div class="btn-row">
@@ -911,6 +922,7 @@ export const HTML_PAGE = `<!DOCTYPE html>
   const allowedOrigin = document.getElementById('allowed-origin');
   const hmacExpiry = document.getElementById('hmac-expiry');
   const hmacSecret = document.getElementById('hmac-secret');
+  const tokenOpaque = document.getElementById('token-opaque');
 
   const imgWidth = document.getElementById('img-width');
   const imgHeight = document.getElementById('img-height');
@@ -926,6 +938,7 @@ export const HTML_PAGE = `<!DOCTYPE html>
   const metaPillCache = document.getElementById('meta-pill-cache');
   const metaPillPlatform = document.getElementById('meta-pill-platform');
   const metaPillImage = document.getElementById('meta-pill-image');
+  const metaPillEncrypted = document.getElementById('meta-pill-encrypted');
 
   const codeCurl = document.getElementById('code-curl');
   const codeFetch = document.getElementById('code-fetch');
@@ -1001,6 +1014,37 @@ export const HTML_PAGE = `<!DOCTYPE html>
     return urlObj.pathname + '?' + cleanParams.toString();
   }
 
+  // Web Crypto AES-256-GCM Opaque Token Encryption
+  function bufferToBase64Url(bytes) {
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  async function computeAesGcmToken(payload, secret) {
+    const enc = new TextEncoder();
+    const digest = await window.crypto.subtle.digest('SHA-256', enc.encode(secret));
+    const key = await window.crypto.subtle.importKey(
+      'raw',
+      digest,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt']
+    );
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+    const jsonStr = JSON.stringify(payload);
+    const ciphertextBuffer = await window.crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv },
+      key,
+      enc.encode(jsonStr)
+    );
+    const ciphertextBytes = new Uint8Array(ciphertextBuffer);
+    const combined = new Uint8Array(iv.length + ciphertextBytes.length);
+    combined.set(iv, 0);
+    combined.set(ciphertextBytes, iv.length);
+    return bufferToBase64Url(combined);
+  }
+
   // REAL-TIME LINK BUILDER
   let debounceTimer = null;
   async function updateLiveProxy() {
@@ -1023,8 +1067,87 @@ export const HTML_PAGE = `<!DOCTYPE html>
     if (!rawUrl) {
       outputUrl.value = '';
       metaPillImage.style.display = 'none';
+      if (metaPillEncrypted) metaPillEncrypted.style.display = 'none';
       updateCodeSnippets('');
       return;
+    }
+
+    // Check if Opaque Encrypted Token mode is active
+    if (tokenOpaque && tokenOpaque.checked) {
+      const secret = hmacSecret.value.trim();
+      metaPillEncrypted.style.display = 'inline-block';
+
+      if (!secret) {
+        outputUrl.value = '⚠️ Please enter a Secret Key in Security options to generate an encrypted token.';
+        metaPillEncrypted.textContent = '🔒 Key Required';
+        metaPillEncrypted.className = 'meta-pill';
+        updateCodeSnippets('');
+        saveFormToLocalStorage();
+        return;
+      }
+
+      metaPillEncrypted.textContent = '🔒 AES-256 Opaque';
+      metaPillEncrypted.className = 'meta-pill highlight';
+
+      const payload = { url: rawUrl };
+      if (activeDeliveryMode === 'inline') payload.disposition = 'inline';
+      if (filenameInput.value.trim()) payload.filename = filenameInput.value.trim();
+      if (fallbackUrl.value.trim()) payload.fallback = fallbackUrl.value.trim();
+      if (mimeOverride.value.trim()) payload.type = mimeOverride.value.trim();
+      if (refererMode.value === 'strip') payload.referer = 'strip';
+      else if (refererMode.value === 'custom' && customReferer.value.trim()) payload.referer = customReferer.value.trim();
+      if (customHeaders.value.trim()) {
+        try { payload.headers = JSON.parse(customHeaders.value.trim()); } catch {}
+      }
+      if (compressMode.value !== 'none') payload.compress = compressMode.value;
+      if (replaceFrom.value.trim()) {
+        payload.replace_from = replaceFrom.value.trim();
+        payload.replace_to = replaceTo.value;
+      }
+      if (cacheTtl.value !== '86400') payload.cache_ttl = cacheTtl.value;
+      if (allowedOrigin.value.trim()) payload.allowed_origin = allowedOrigin.value.trim();
+
+      // Image resizing options
+      let hasImageResize = false;
+      if (imgWidth.value.trim()) { payload.w = imgWidth.value.trim(); hasImageResize = true; }
+      if (imgHeight.value.trim()) { payload.h = imgHeight.value.trim(); hasImageResize = true; }
+      if (imgWidth.value.trim() || imgHeight.value.trim()) {
+        if (imgFit.value) payload.fit = imgFit.value;
+      }
+      if (imgFormat.value) { payload.format = imgFormat.value; hasImageResize = true; }
+      if (imgQuality.value.trim()) { payload.q = imgQuality.value.trim(); hasImageResize = true; }
+      if (imgBlur.value.trim() && imgBlur.value.trim() !== '0') { payload.blur = imgBlur.value.trim(); hasImageResize = true; }
+      if (imgRotate.value) { payload.rotate = imgRotate.value; hasImageResize = true; }
+      if (imgEngine.value !== 'auto') payload.image_engine = imgEngine.value;
+
+      if (hasImageResize) {
+        metaPillImage.style.display = 'inline-block';
+        let imgLabel = 'Resize';
+        if (imgWidth.value.trim() && imgHeight.value.trim()) imgLabel = imgWidth.value.trim() + 'x' + imgHeight.value.trim();
+        else if (imgWidth.value.trim()) imgLabel = imgWidth.value.trim() + 'w';
+        else if (imgHeight.value.trim()) imgLabel = imgHeight.value.trim() + 'h';
+        if (imgFormat.value) imgLabel += ' (' + imgFormat.value + ')';
+        metaPillImage.textContent = imgLabel;
+      } else {
+        metaPillImage.style.display = 'none';
+      }
+
+      if (hmacExpiry.value !== 'none') {
+        payload.expires = Math.floor(Date.now() / 1000) + parseInt(hmacExpiry.value, 10);
+      }
+
+      try {
+        const token = await computeAesGcmToken(payload, secret);
+        const opaqueUrl = window.location.origin + '/s/' + token;
+        outputUrl.value = opaqueUrl;
+        updateCodeSnippets(opaqueUrl);
+        saveFormToLocalStorage();
+      } catch (err) {
+        console.error('Encryption error:', err);
+      }
+      return;
+    } else {
+      if (metaPillEncrypted) metaPillEncrypted.style.display = 'none';
     }
 
     const proxied = new URL('/proxy', window.location.origin);
@@ -1177,7 +1300,7 @@ export const HTML_PAGE = `<!DOCTYPE html>
     inputUrl, fallbackUrl, filenameInput,
     refererMode, customReferer, customHeaders,
     mimeOverride, compressMode, replaceFrom, replaceTo,
-    cacheTtl, allowedOrigin, hmacExpiry, hmacSecret,
+    cacheTtl, allowedOrigin, hmacExpiry, hmacSecret, tokenOpaque,
     imgWidth, imgHeight, imgFit, imgFormat, imgQuality, imgBlur, imgRotate, imgEngine
   ];
 
@@ -1342,6 +1465,7 @@ export const HTML_PAGE = `<!DOCTYPE html>
         allowedOrigin: allowedOrigin.value,
         hmacExpiry: hmacExpiry.value,
         hmacSecret: hmacSecret.value,
+        tokenOpaque: tokenOpaque ? tokenOpaque.checked : false,
         advancedOpen: advancedDetails ? advancedDetails.open : false,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -1396,6 +1520,7 @@ export const HTML_PAGE = `<!DOCTYPE html>
       if (data.allowedOrigin !== undefined) allowedOrigin.value = data.allowedOrigin;
       if (data.hmacExpiry !== undefined) hmacExpiry.value = data.hmacExpiry;
       if (data.hmacSecret !== undefined) hmacSecret.value = data.hmacSecret;
+      if (data.tokenOpaque !== undefined && tokenOpaque) tokenOpaque.checked = Boolean(data.tokenOpaque);
 
       if (data.advancedOpen && advancedDetails) {
         advancedDetails.open = true;
@@ -1440,6 +1565,7 @@ export const HTML_PAGE = `<!DOCTYPE html>
     allowedOrigin.value = '';
     hmacExpiry.value = 'none';
     hmacSecret.value = '';
+    if (tokenOpaque) tokenOpaque.checked = false;
 
     if (advancedDetails) advancedDetails.open = false;
 

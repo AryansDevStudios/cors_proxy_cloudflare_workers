@@ -33,6 +33,7 @@ Built with pure Web standard APIs (Streams, Web Crypto, Fetch) and Cloudflare ed
 - **Stream Find-and-Replace & HTML Injection**: For textual assets (`text/*`, `application/json`, `application/javascript`, `application/xml`), performs streaming regex replacements (`?replace_from=...&replace_to=...`) and CSS/JS tag injection via `HTMLRewriter` (`?inject_css=...`, `?inject_js=...`).
 
 ### 3. Security, Tokenization & Link Expiry
+- **Stateless AES-256-GCM Opaque Tokens (`/s/<token>` & `?t=<token>`)**: Zero-database, tamper-proof authenticated encryption (AEAD) using Web Crypto. Encrypts the entire proxy configuration (target URL, blur, rotate, width, height, custom headers, disposition, expiration) into an opaque URL-safe token. Recipients cannot inspect raw URLs or visual modifiers, and cannot edit them (e.g. attempting to remove `blur=25` or appending query parameters has no effect; altering even a single character fails verification with `403 Forbidden`).
 - **HMAC-SHA256 Signed & Expiring URLs**: Uses Web Crypto (`crypto.subtle`) to generate tamper-proof links that expire after a set duration (`?expires=1720000000&sig=abcdef...`). Canonicalizes and cryptographically verifies query parameters.
 - **Domain Whitelisting & Token Gates**: Lock proxied URLs to specific origins (`?allowed_origin=https://mysite.com` or `ALLOWED_ORIGINS` env var) to stop unauthorized 3rd-party embedding. Optional `PROXY_TOKEN` gate.
 - **Strict Multi-Layer SSRF Defense**: Inspects every target host and followed redirect (up to 5 hops), blocking private IPv4 blocks (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), loopback addresses (`127.0.0.1`), link-local IPs, cloud metadata endpoints (`169.254.169.254`, `metadata.google.internal`), carrier-grade NAT (`100.64.0.0/10`), decimal/hex/octal IP formats, dangerous ports, and IPv6 equivalents.
@@ -124,6 +125,7 @@ cors_proxy_cloudflare_workers/
 | `blur` | number | Blur radius (1-250). | `?blur=5` |
 | `rotate` | number | Rotates image degrees (`90`, `180`, `270`). | `?rotate=90` |
 | `image_engine` | string | Force engine: `auto` (default), `cf`, or `wsrv`. | `?image_engine=auto` |
+| `t` | string | **Stateless AES-256-GCM Opaque Token**. Conceals target URL, modifiers & headers. | `?t=nvC2omhz...` or `/s/nvC2omhz...` |
 
 ---
 
@@ -152,6 +154,19 @@ curl "https://<your-worker>.workers.dev/proxy?url=https://api.example.com/v1/dat
 ### 5. Automatic Fallback & Backup Mirror
 ```bash
 curl "https://<your-worker>.workers.dev/proxy?url=https://primary.cdn.com/asset.zip&fallback=https://backup.cdn.com/asset.zip"
+```
+
+### 6. Opaque Encrypted Link (Hide URL & Modifiers like Blur / Rotate)
+Generate an opaque encrypted link with sealed parameters (zero database / stateless edge):
+```bash
+# 1. Generate token via /encrypt (or generate instantly in Web Dashboard)
+curl -X POST "https://<your-worker>.workers.dev/encrypt" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com/photo.jpg","blur":25,"rotate":90,"expiresIn":86400}'
+# Returns: { "token": "...", "encryptedUrl": "https://<your-worker>.workers.dev/s/<token>" }
+
+# 2. Fetch via short link (recipients cannot see or tamper with the origin or blur value)
+curl -L -O -J "https://<your-worker>.workers.dev/s/<token>"
 ```
 
 ---

@@ -13,6 +13,8 @@ import {
   signUrl,
   verifySignedUrl,
   buildCanonicalQuery,
+  encryptToken,
+  decryptToken,
 } from '../src/crypto.js';
 
 import {
@@ -325,4 +327,142 @@ test('Edge Image Resizing — Options parsing and URL builder', () => {
   const nonImage = parseImageResizeOptions(new URLSearchParams('url=https://example.com/file.txt'));
   assert.equal(nonImage, null);
 });
+
+test('Stateless AES-256-GCM Token Encryption, Decryption & Tamper-Proofing', async () => {
+  const secret = 'super-secure-production-secret-12345';
+  const originalPayload = {
+    url: 'https://cdn.example.com/private/photo.jpg',
+    blur: 40,
+    rotate: 90,
+    w: 800,
+    h: 600,
+    disposition: 'inline',
+    filename: 'sanitized.jpg',
+  };
+
+  // 1. Encryption
+  const { token, expires } = await encryptToken(originalPayload, secret, 3600);
+  assert.ok(token);
+  assert.equal(typeof token, 'string');
+  // Target URL and visual modifiers must NOT appear anywhere in the plaintext token
+  assert.equal(token.includes('private/photo.jpg'), false);
+  assert.equal(token.includes('blur'), false);
+  assert.equal(token.includes('rotate'), false);
+  assert.equal(typeof expires, 'number');
+
+  // 2. Successful Decryption
+  const decrypted = await decryptToken(token, secret);
+  assert.equal(decrypted.valid, true);
+  assert.equal(decrypted.payload.url, originalPayload.url);
+  assert.equal(decrypted.payload.blur, originalPayload.blur);
+  assert.equal(decrypted.payload.rotate, originalPayload.rotate);
+  assert.equal(decrypted.payload.w, originalPayload.w);
+  assert.equal(decrypted.payload.filename, originalPayload.filename);
+
+  // 3. Tamper detection: modifying characters must fail authenticated decryption
+  const midPos = Math.floor(token.length / 2);
+  const tamperedMid = token.slice(0, midPos) + (token[midPos] === 'x' ? 'y' : 'x') + token.slice(midPos + 1);
+  const tamperedMidRes = await decryptToken(tamperedMid, secret);
+  assert.equal(tamperedMidRes.valid, false);
+  assert.equal(tamperedMidRes.error, 'Invalid or tampered token');
+
+  const tamperedEnd = token.slice(0, -1) + (token.slice(-1) === 'A' ? 'B' : 'A');
+  const tamperedEndRes = await decryptToken(tamperedEnd, secret);
+  assert.equal(tamperedEndRes.valid, false);
+  assert.equal(tamperedEndRes.error, 'Invalid or tampered token');
+
+  // 4. Wrong key detection
+  const wrongKeyRes = await decryptToken(token, 'completely-different-key');
+  assert.equal(wrongKeyRes.valid, false);
+  assert.equal(wrongKeyRes.error, 'Invalid or tampered token');
+
+  // 5. Expiration detection
+  const expiredEnc = await encryptToken({ url: 'https://example.com/doc.pdf' }, secret, -60);
+  const expiredRes = await decryptToken(expiredEnc.token, secret);
+  assert.equal(expiredRes.valid, false);
+  assert.ok(expiredRes.error.includes('expired'));
+
+  // 6. Malformed input
+  const emptyRes = await decryptToken('', secret);
+  assert.equal(emptyRes.valid, false);
+  const shortRes = await decryptToken('dG9vLXNob3J0', secret);
+  assert.equal(shortRes.valid, false);
+});
+
+test('Worker /encrypt endpoint and Opaque Token routing (/s/:token and /proxy?t=:token)', async () => {
+  const env = { HMAC_SECRET: 'master-edge-secret-key-999' };
+
+  // 1. GET /encrypt
+  const getEncryptReq = new Request(
+    'https://worker.test/encrypt?url=https%3A%2F%2Fexample.com%2Fimage.jpg&blur=30&rotate=180&expires_in=7200',
+    { method: 'GET' }
+  );
+  const getEncryptRes = await worker.fetch(getEncryptReq, env, {});
+  assert.equal(getEncryptRes.status, 200);
+  const getData = await getEncryptRes.json();
+  assert.ok(getData.token);
+  assert.ok(getData.encryptedUrl.includes('/s/'));
+  assert.ok(getData.proxyUrl.includes('/proxy?t='));
+
+  // 2. POST /encrypt
+  const postEncryptReq = new Request('https://worker.test/encrypt', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      url: 'https://example.com/file.pdf',
+      disposition: 'inline',
+      expiresIn: 3600,
+    }),
+  });
+  const postEncryptRes = await worker.fetch(postEncryptReq, env, {});
+  assert.equal(postEncryptRes.status, 200);
+  const postData = await postEncryptRes.json();
+  assert.ok(postData.token);
+
+  // 3. /encrypt without secret returns 501
+  const noSecretReq = new Request('https://worker.test/encrypt?url=https://example.com/file.pdf', { method: 'GET' });
+  const noSecretRes = await worker.fetch(noSecretReq, {}, {});
+  assert.equal(noSecretRes.status, 501);
+
+  // 4. /encrypt without url parameter returns 400
+  const noUrlReq = new Request('https://worker.test/encrypt?blur=20', { method: 'GET' });
+  const noUrlRes = await worker.fetch(noUrlReq, env, {});
+  assert.equal(noUrlRes.status, 400);
+
+  // 5. Short link route /s/<token> with tampered token returns 403
+  const badToken = getData.token.slice(0, -2) + 'zz';
+  const tamperedRouteReq = new Request(`https://worker.test/s/${badToken}`, { method: 'GET' });
+  const tamperedRouteRes = await worker.fetch(tamperedRouteReq, env, {});
+  assert.equal(tamperedRouteRes.status, 403);
+  assert.ok((await tamperedRouteRes.text()).includes('Invalid or tampered token'));
+
+  // 6. Route /proxy?t=<token> with tampered token returns 403
+  const tamperedProxyReq = new Request(`https://worker.test/proxy?t=${badToken}`, { method: 'GET' });
+  const tamperedProxyRes = await worker.fetch(tamperedProxyReq, env, {});
+  assert.equal(tamperedProxyRes.status, 403);
+
+  // 7. Expired token via /s/<token> returns 403
+  const expiredEnc = await encryptToken({ url: 'https://example.com/test.jpg' }, env.HMAC_SECRET, -100);
+  const expiredRouteReq = new Request(`https://worker.test/s/${expiredEnc.token}`, { method: 'GET' });
+  const expiredRouteRes = await worker.fetch(expiredRouteReq, env, {});
+  assert.equal(expiredRouteRes.status, 403);
+  assert.ok((await expiredRouteRes.text()).includes('expired'));
+
+  // 8. SSRF target inside decrypted token is blocked safely
+  const ssrfEnc = await encryptToken({ url: 'http://127.0.0.1:8080/admin' }, env.HMAC_SECRET);
+  const ssrfRouteReq = new Request(`https://worker.test/s/${ssrfEnc.token}`, { method: 'GET' });
+  const ssrfRouteRes = await worker.fetch(ssrfRouteReq, env, {});
+  assert.equal(ssrfRouteRes.status, 403);
+  assert.ok((await ssrfRouteRes.text()).includes('Security error'));
+
+  // 9. Tamper resistance: External query parameters cannot override sealed token modifiers
+  const overrideEnc = await encryptToken({ url: 'http://127.0.0.1:8080/secret', blur: 50 }, env.HMAC_SECRET);
+  // Attempt to override URL to public and blur to 0 via query string
+  const overrideReq = new Request(`https://worker.test/s/${overrideEnc.token}?url=https://example.com/safe&blur=0`, { method: 'GET' });
+  const overrideRes = await worker.fetch(overrideReq, env, {});
+  // Sealed SSRF url inside token must still be enforced (cannot be overridden by ?url=https://example.com/safe)
+  assert.equal(overrideRes.status, 403);
+  assert.ok((await overrideRes.text()).includes('Security error'));
+});
+
 

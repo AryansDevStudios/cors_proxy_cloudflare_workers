@@ -136,3 +136,144 @@ export async function verifySignedUrl(url, secret) {
     return { valid: false, error: `Verification failed: ${err.message}` };
   }
 }
+
+/**
+ * Encodes a Uint8Array into a URL-safe Base64url string without padding.
+ */
+export function bufferToBase64Url(bytes) {
+  let binary = '';
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+/**
+ * Decodes a URL-safe Base64url string into a Uint8Array.
+ */
+export function base64UrlToBuffer(base64url) {
+  if (typeof base64url !== 'string') return null;
+  let base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+  while (base64.length % 4 !== 0) {
+    base64 += '=';
+  }
+  try {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    // Strict non-malleable canonical validation
+    if (bufferToBase64Url(bytes) !== base64url) {
+      return null;
+    }
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Derives a 256-bit AES-GCM key from an arbitrary string secret using SHA-256.
+ */
+export async function getAesKey(secret, usage = ['encrypt', 'decrypt']) {
+  const digest = await crypto.subtle.digest('SHA-256', encoder.encode(secret));
+  return await crypto.subtle.importKey(
+    'raw',
+    digest,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    usage
+  );
+}
+
+/**
+ * Encrypts an arbitrary object payload into an opaque, tamper-proof AES-256-GCM token.
+ * Contains 12-byte IV + ciphertext + 16-byte GCM authentication tag.
+ * @param {object} payload - Configuration payload (e.g. { url, blur, rotate, disposition, ... })
+ * @param {string} secret - Secret encryption key
+ * @param {number|null} expiresInSeconds - Optional lifetime in seconds
+ * @returns {Promise<{ token: string, expires: number|null }>}
+ */
+export async function encryptToken(payload, secret, expiresInSeconds = null) {
+  if (!secret) throw new Error('Secret key is required for token encryption');
+  const data = typeof payload === 'object' && payload !== null ? { ...payload } : { data: payload };
+
+  if (expiresInSeconds && !data.expires) {
+    data.expires = Math.floor(Date.now() / 1000) + expiresInSeconds;
+  }
+
+  const jsonStr = JSON.stringify(data);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await getAesKey(secret, ['encrypt']);
+
+  const ciphertextBuffer = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    encoder.encode(jsonStr)
+  );
+
+  const ciphertextBytes = new Uint8Array(ciphertextBuffer);
+  const combined = new Uint8Array(iv.length + ciphertextBytes.length);
+  combined.set(iv, 0);
+  combined.set(ciphertextBytes, iv.length);
+
+  return {
+    token: bufferToBase64Url(combined),
+    expires: data.expires || null,
+  };
+}
+
+/**
+ * Decrypts and verifies an opaque AES-256-GCM token.
+ * Rejects if tampered (tag mismatch), wrong key, corrupt bytes, or expired.
+ * @param {string} token - Base64url token
+ * @param {string} secret - Secret encryption key
+ * @returns {Promise<{ valid: boolean, payload?: object, error?: string, expires?: number|null }>}
+ */
+export async function decryptToken(token, secret) {
+  if (!token || typeof token !== 'string') {
+    return { valid: false, error: 'Missing or invalid token string' };
+  }
+  if (!secret) {
+    return { valid: false, error: 'Missing encryption secret key' };
+  }
+
+  const combined = base64UrlToBuffer(token);
+  if (!combined || combined.length < 28) {
+    return { valid: false, error: 'Invalid or tampered token' };
+  }
+
+  const iv = combined.subarray(0, 12);
+  const ciphertextAndTag = combined.subarray(12);
+
+  try {
+    const key = await getAesKey(secret, ['decrypt']);
+    const decryptedBuffer = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv },
+      key,
+      ciphertextAndTag
+    );
+
+    const decoder = new TextDecoder();
+    const jsonStr = decoder.decode(decryptedBuffer);
+    const payload = JSON.parse(jsonStr);
+
+    const exp = payload.expires || payload.exp;
+    if (exp) {
+      const now = Math.floor(Date.now() / 1000);
+      if (now > exp) {
+        return { valid: false, error: 'Encrypted token has expired', expires: exp };
+      }
+    }
+
+    return { valid: true, payload, expires: exp || null };
+  } catch (err) {
+    return { valid: false, error: 'Invalid or tampered token' };
+  }
+}
+

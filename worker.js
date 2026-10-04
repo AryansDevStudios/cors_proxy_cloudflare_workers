@@ -26,7 +26,7 @@
  */
 
 import { validateTargetUrl, isBlockedHost } from './src/ssrf.js';
-import { verifySignedUrl, signUrl } from './src/crypto.js';
+import { verifySignedUrl, signUrl, encryptToken, decryptToken } from './src/crypto.js';
 import {
   unwrapPlatformUrl,
   fetchWithPlatformAndFallback,
@@ -94,27 +94,62 @@ function isOriginAllowed(request, allowedOriginSetting) {
 /**
  * Main Proxy Handler for GET and HEAD requests.
  */
-async function handleProxy(request, env, ctx) {
+async function handleProxy(request, env, ctx, tokenParam = null) {
   const reqUrl = new URL(request.url);
-  const originalUrl = reqUrl.searchParams.get('url');
-  const fallbackUrl = reqUrl.searchParams.get('fallback') || reqUrl.searchParams.get('mirror');
-  const filenameParam = reqUrl.searchParams.get('filename');
-  const dispositionParam = reqUrl.searchParams.get('disposition');
-  const downloadParam = reqUrl.searchParams.get('download');
-  const typeOverride = reqUrl.searchParams.get('type') || reqUrl.searchParams.get('content_type') || reqUrl.searchParams.get('mime');
-  const customHeadersParam = reqUrl.searchParams.get('headers');
-  const refererParam = reqUrl.searchParams.get('referer');
-  const originParam = reqUrl.searchParams.get('origin');
-  const compressParam = reqUrl.searchParams.get('compress');
-  const decompressParam = reqUrl.searchParams.get('decompress');
-  const replaceFrom = reqUrl.searchParams.get('replace_from');
-  const replaceTo = reqUrl.searchParams.get('replace_to') ?? '';
-  const replaceFlags = reqUrl.searchParams.get('replace_flags') || 'g';
-  const injectCss = reqUrl.searchParams.get('inject_css');
-  const injectJs = reqUrl.searchParams.get('inject_js');
-  const allowedOriginParam = reqUrl.searchParams.get('allowed_origin') || env.ALLOWED_ORIGINS;
-  const cacheTtlParam = reqUrl.searchParams.get('cache_ttl') ?? reqUrl.searchParams.get('ttl');
-  const persistR2 = reqUrl.searchParams.get('persist_r2') === '1' || env.R2_AUTO_PERSIST === 'true';
+  const token = tokenParam || reqUrl.searchParams.get('t');
+
+  let effectiveParams = new URLSearchParams(reqUrl.searchParams);
+
+  // If encrypted token is present, decrypt and merge internal parameters
+  if (token) {
+    const encSecret = env.ENCRYPTION_KEY || env.HMAC_SECRET || env.PROXY_SECRET || env.SECRET_KEY;
+    if (!encSecret) {
+      return new Response('Forbidden: Server encryption secret (ENCRYPTION_KEY or HMAC_SECRET) is not configured', {
+        status: 501,
+        headers: corsHeaders({}, '*'),
+      });
+    }
+
+    const decryptRes = await decryptToken(token, encSecret);
+    if (!decryptRes.valid) {
+      return new Response(`Forbidden: ${decryptRes.error}`, {
+        status: 403,
+        headers: corsHeaders({}, '*'),
+      });
+    }
+
+    // Merge sealed parameters (payload overrides external query params for tamper-proofing)
+    const payload = decryptRes.payload || {};
+    for (const [k, v] of Object.entries(payload)) {
+      if (v !== null && v !== undefined) {
+        if (typeof v === 'object') {
+          effectiveParams.set(k, JSON.stringify(v));
+        } else {
+          effectiveParams.set(k, String(v));
+        }
+      }
+    }
+  }
+
+  const originalUrl = effectiveParams.get('url');
+  const fallbackUrl = effectiveParams.get('fallback') || effectiveParams.get('mirror');
+  const filenameParam = effectiveParams.get('filename');
+  const dispositionParam = effectiveParams.get('disposition');
+  const downloadParam = effectiveParams.get('download');
+  const typeOverride = effectiveParams.get('type') || effectiveParams.get('content_type') || effectiveParams.get('mime');
+  const customHeadersParam = effectiveParams.get('headers');
+  const refererParam = effectiveParams.get('referer');
+  const originParam = effectiveParams.get('origin');
+  const compressParam = effectiveParams.get('compress');
+  const decompressParam = effectiveParams.get('decompress');
+  const replaceFrom = effectiveParams.get('replace_from');
+  const replaceTo = effectiveParams.get('replace_to') ?? '';
+  const replaceFlags = effectiveParams.get('replace_flags') || 'g';
+  const injectCss = effectiveParams.get('inject_css');
+  const injectJs = effectiveParams.get('inject_js');
+  const allowedOriginParam = effectiveParams.get('allowed_origin') || env.ALLOWED_ORIGINS;
+  const cacheTtlParam = effectiveParams.get('cache_ttl') ?? effectiveParams.get('ttl');
+  const persistR2 = effectiveParams.get('persist_r2') === '1' || env.R2_AUTO_PERSIST === 'true';
 
   // 1. Origin Whitelist Check
   if (!isOriginAllowed(request, allowedOriginParam)) {
@@ -140,18 +175,20 @@ async function handleProxy(request, env, ctx) {
     return new Response(`Security error: ${err.message}`, { status, headers: responseCors });
   }
 
-  // 3. HMAC Signature & Expiry Check
-  const hmacSecret = env.HMAC_SECRET || env.PROXY_SECRET || env.SECRET_KEY;
-  if (hmacSecret || reqUrl.searchParams.has('sig')) {
-    if (hmacSecret) {
-      const verifyRes = await verifySignedUrl(request.url, hmacSecret);
-      if (!verifyRes.valid) {
-        return new Response(`Forbidden: ${verifyRes.error}`, { status: 403, headers: responseCors });
-      }
-    } else if (reqUrl.searchParams.has('expires')) {
-      const exp = parseInt(reqUrl.searchParams.get('expires'), 10);
-      if (Date.now() / 1000 > exp) {
-        return new Response('Forbidden: Signed URL has expired', { status: 403, headers: responseCors });
+  // 3. HMAC Signature & Expiry Check (for plain unencrypted URLs)
+  if (!token) {
+    const hmacSecret = env.HMAC_SECRET || env.PROXY_SECRET || env.SECRET_KEY;
+    if (hmacSecret || reqUrl.searchParams.has('sig')) {
+      if (hmacSecret) {
+        const verifyRes = await verifySignedUrl(request.url, hmacSecret);
+        if (!verifyRes.valid) {
+          return new Response(`Forbidden: ${verifyRes.error}`, { status: 403, headers: responseCors });
+        }
+      } else if (reqUrl.searchParams.has('expires')) {
+        const exp = parseInt(reqUrl.searchParams.get('expires'), 10);
+        if (Date.now() / 1000 > exp) {
+          return new Response('Forbidden: Signed URL has expired', { status: 403, headers: responseCors });
+        }
       }
     }
   }
@@ -232,7 +269,7 @@ async function handleProxy(request, env, ctx) {
   }
 
   // 8. Fetch from Upstream with Smart Resolvers & Fallback (or Image Resizer)
-  const imageResizeOptions = parseImageResizeOptions(reqUrl.searchParams);
+  const imageResizeOptions = parseImageResizeOptions(effectiveParams);
   let fetchResult;
   try {
     if (imageResizeOptions) {
@@ -504,7 +541,87 @@ export default {
         );
       }
 
-      // 4. Main Proxy Endpoint
+      // 4. Helper Endpoint: Encrypt parameters into stateless opaque token
+      if (url.pathname === '/encrypt') {
+        const secret = env.ENCRYPTION_KEY || env.HMAC_SECRET || env.PROXY_SECRET || env.SECRET_KEY;
+        if (!secret) {
+          return new Response('Server encryption secret (ENCRYPTION_KEY or HMAC_SECRET) is not configured on this worker', {
+            status: 501,
+            headers: corsHeaders(),
+          });
+        }
+
+        let payload = {};
+        let expiresIn = null;
+
+        if (request.method === 'POST') {
+          try {
+            const body = await request.json();
+            if (body && typeof body === 'object') {
+              payload = { ...body };
+              if (payload.expires_in) {
+                expiresIn = parseInt(payload.expires_in, 10);
+                delete payload.expires_in;
+              } else if (payload.expiresIn) {
+                expiresIn = parseInt(payload.expiresIn, 10);
+                delete payload.expiresIn;
+              }
+            }
+          } catch {
+            return new Response('Invalid JSON payload body', { status: 400, headers: corsHeaders() });
+          }
+        } else if (request.method === 'GET') {
+          for (const [k, v] of url.searchParams.entries()) {
+            if (k === 'expires_in' || k === 'expiresIn') {
+              expiresIn = parseInt(v, 10);
+            } else {
+              payload[k] = v;
+            }
+          }
+        } else {
+          return new Response('Method not allowed', { status: 405, headers: corsHeaders() });
+        }
+
+        if (!payload.url) {
+          return new Response('Missing target "url" parameter in payload to encrypt', { status: 400, headers: corsHeaders() });
+        }
+
+        const { token, expires } = await encryptToken(payload, secret, expiresIn);
+        const origin = url.origin;
+
+        return new Response(JSON.stringify({
+          token,
+          expires,
+          encryptedUrl: `${origin}/s/${token}`,
+          proxyUrl: `${origin}/proxy?t=${token}`,
+        }), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+        });
+      }
+
+      // 5. Short Opaque Encrypted Route: /s/<token>
+      if (url.pathname.startsWith('/s/')) {
+        if (request.method !== 'GET' && request.method !== 'HEAD') {
+          return new Response('Method not allowed', { status: 405, headers: corsHeaders() });
+        }
+
+        const token = url.pathname.slice(3).trim();
+        if (!token) {
+          return new Response('Missing encrypted token in URL path', { status: 400, headers: corsHeaders() });
+        }
+
+        // Access Gate: PROXY_TOKEN
+        if (env.PROXY_TOKEN) {
+          const provided = url.searchParams.get('token') || request.headers.get('x-proxy-token');
+          if (provided !== env.PROXY_TOKEN) {
+            return new Response('Unauthorized: missing or invalid token', { status: 401, headers: corsHeaders() });
+          }
+        }
+
+        return await handleProxy(request, env, ctx, token);
+      }
+
+      // 6. Main Proxy Endpoint
       if (url.pathname === '/proxy') {
         if (request.method !== 'GET' && request.method !== 'HEAD') {
           return new Response('Method not allowed', { status: 405, headers: corsHeaders() });
