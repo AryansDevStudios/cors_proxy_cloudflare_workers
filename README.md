@@ -52,9 +52,11 @@ Built with pure Web standard APIs (Streams, Web Crypto, Fetch) and Cloudflare ed
 - **Optional Cloudflare R2 Mirroring**: Bind an R2 bucket (`env.R2_BUCKET`) to automatically snapshot requested files, turning the worker into a permanent availability mirror for flaky origins.
 
 ### 6. Developer Experience & UI
-- **Interactive Web Dashboard**: Embedded dark-mode developer dashboard at `/` with real-time platform detection, URL generator, and HMAC signature signer.
-- **cURL & Code Snippets Generator**: 1-click snippet generation for `curl`, JavaScript `fetch`, and Python `requests`.
-- **Live HTTP Header Inspector Drawer**: Interactive drawer to execute `HEAD` requests, inspect latency, status badges, MIME types, seekable byte-range support, and all response headers.
+- **Zero-Click Real-Time Generation**: No "Generate" button required — proxied URLs and code snippets update instantly on every keystroke, toggle, or parameter change.
+- **Segmented Browser Delivery Toggle**: Quick 1-click toggle between **📥 Download File** (`Content-Disposition: attachment`) and **👁️ Open in Browser** (`Content-Disposition: inline`) for native browser viewing (PDFs, media, JSON).
+- **Collapsible Advanced Options**: Streamlined interface that tucks secondary options (Fallback Mirror, Image Resizing, Custom Headers, Compression, Security & Cache TTL) into a clean, collapsible accordion.
+- **cURL & Multi-Language Snippet Generator**: 1-click copy for **cURL**, **JavaScript `fetch`**, and **Python `requests`** code snippets synced live with active options.
+- **Live HTTP Header Inspector Drawer**: Executes a `HEAD` request to inspect upstream status, roundtrip latency, MIME type, seekable byte-range support, and all response headers directly in the tool.
 
 ---
 
@@ -122,6 +124,35 @@ cors_proxy_cloudflare_workers/
 | `blur` | number | Blur radius (1-250). | `?blur=5` |
 | `rotate` | number | Rotates image degrees (`90`, `180`, `270`). | `?rotate=90` |
 | `image_engine` | string | Force engine: `auto` (default), `cf`, or `wsrv`. | `?image_engine=auto` |
+
+---
+
+## 💡 Practical Examples
+
+### 1. Basic Fetch (Browser Inline Preview)
+```bash
+curl "https://<your-worker>.workers.dev/proxy?url=https://example.com/document.pdf&disposition=inline"
+```
+
+### 2. Download with Custom Filename
+```bash
+curl "https://<your-worker>.workers.dev/proxy?url=https://example.com/raw-report&disposition=attachment&filename=final-report.pdf"
+```
+
+### 3. On-the-Fly Image Resizing (Convert to WebP)
+```bash
+curl "https://<your-worker>.workers.dev/proxy?url=https://example.com/photo.jpg&w=800&h=600&fit=cover&format=webp&q=85"
+```
+
+### 4. Fetch Behind Bearer Token Auth
+```bash
+curl "https://<your-worker>.workers.dev/proxy?url=https://api.example.com/v1/data.json&headers=%7B%22Authorization%22%3A%22Bearer%20my-secret-token%22%7D"
+```
+
+### 5. Automatic Fallback & Backup Mirror
+```bash
+curl "https://<your-worker>.workers.dev/proxy?url=https://primary.cdn.com/asset.zip&fallback=https://backup.cdn.com/asset.zip"
+```
 
 ---
 
