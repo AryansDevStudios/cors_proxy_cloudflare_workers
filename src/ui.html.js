@@ -774,16 +774,6 @@ export const HTML_PAGE = `<!DOCTYPE html>
                 <input type="password" id="hmac-secret" placeholder="Your secret key..." />
               </div>
             </div>
-
-            <div style="margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--panel-border);">
-              <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:600; color:#fff; user-select:none; margin:0;">
-                <input type="checkbox" id="token-opaque" style="width:auto; cursor:pointer; accent-color:var(--accent);" />
-                <span>🔒 Generate Opaque Encrypted Token (<code style="font-size:0.8rem; color:var(--cyan);">/s/...</code>)</span>
-              </label>
-              <div class="field-desc" style="margin-left: 24px; margin-top: 4px;">
-                Stateless AES-256-GCM encryption. Conceals target URL, blur, rotate, and all modifiers so recipients cannot inspect or alter parameters. Modifying any character fails verification (403 Forbidden). Requires Secret Key.
-              </div>
-            </div>
           </div>
         </div>
       </details>
@@ -794,9 +784,15 @@ export const HTML_PAGE = `<!DOCTYPE html>
       <!-- Live Proxied Link Card -->
       <div class="card">
         <div class="card-header">
-          <h2 class="card-title">
-            <span>⚡ Live Proxied Link</span>
-          </h2>
+          <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <h2 class="card-title" style="margin:0;">
+              <span>⚡ Live Proxied Link</span>
+            </h2>
+            <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-size:0.78rem; font-weight:600; color:var(--accent); background:rgba(245, 158, 11, 0.1); border:1px solid rgba(245, 158, 11, 0.28); padding:3px 9px; border-radius:999px; user-select:none;" title="Stateless AES-256-GCM encrypted link (/s/...) concealing target URL, blur, rotate, and modifiers from recipients">
+              <input type="checkbox" id="token-opaque" style="width:auto; margin:0; cursor:pointer; accent-color:var(--accent);" />
+              <span>🔒 Opaque Token (/s/...)</span>
+            </label>
+          </div>
           <div style="display:flex; gap:8px;">
             <button id="inspect-btn" class="cyan-btn" type="button">🔍 Inspect Headers</button>
             <button id="open-link-btn" type="button">↗ Open in Tab</button>
@@ -1339,6 +1335,17 @@ export const HTML_PAGE = `<!DOCTYPE html>
   document.getElementById('open-link-btn').addEventListener('click', () => {
     if (outputUrl.value) window.open(outputUrl.value, '_blank');
   });
+
+  // Opaque Token helper: auto-expand and focus Secret Key if empty
+  if (tokenOpaque) {
+    tokenOpaque.addEventListener('change', () => {
+      if (tokenOpaque.checked && !hmacSecret.value.trim()) {
+        if (advancedDetails) advancedDetails.open = true;
+        hmacSecret.focus();
+        showToast('Enter Secret Key in Security options to generate token');
+      }
+    });
+  }
 
   // Snippet Tabs
   document.querySelectorAll('.tab-btn').forEach(btn => {
