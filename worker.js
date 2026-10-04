@@ -178,17 +178,21 @@ async function handleProxy(request, env, ctx, tokenParam = null) {
   // 3. HMAC Signature & Expiry Check (for plain unencrypted URLs)
   if (!token) {
     const hmacSecret = env.HMAC_SECRET || env.PROXY_SECRET || env.SECRET_KEY;
-    if (hmacSecret || reqUrl.searchParams.has('sig')) {
+    const requireHmac = env.REQUIRE_HMAC === 'true' || env.ENFORCE_HMAC === 'true';
+
+    if (requireHmac || reqUrl.searchParams.has('sig')) {
       if (hmacSecret) {
         const verifyRes = await verifySignedUrl(request.url, hmacSecret);
         if (!verifyRes.valid) {
           return new Response(`Forbidden: ${verifyRes.error}`, { status: 403, headers: responseCors });
         }
-      } else if (reqUrl.searchParams.has('expires')) {
-        const exp = parseInt(reqUrl.searchParams.get('expires'), 10);
-        if (Date.now() / 1000 > exp) {
-          return new Response('Forbidden: Signed URL has expired', { status: 403, headers: responseCors });
-        }
+      } else if (requireHmac) {
+        return new Response('Forbidden: Worker requires HMAC signature but no secret key is configured', { status: 500, headers: responseCors });
+      }
+    } else if (reqUrl.searchParams.has('expires')) {
+      const exp = parseInt(reqUrl.searchParams.get('expires'), 10);
+      if (Date.now() / 1000 > exp) {
+        return new Response('Forbidden: Signed URL has expired', { status: 403, headers: responseCors });
       }
     }
   }

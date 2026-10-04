@@ -261,6 +261,20 @@ test('Security Gate — Origin Whitelist and Token Gate', async () => {
   const badTokenReq = new Request('https://worker.test/proxy?url=https://example.com/data.json&token=wrong', { method: 'GET' });
   const badTokenRes = await worker.fetch(badTokenReq, { PROXY_TOKEN: 'secret-token-123' }, {});
   assert.equal(badTokenRes.status, 401);
+
+  // HMAC enforcement mode (REQUIRE_HMAC='true')
+  const reqUnsignedBlocked = new Request('https://worker.test/proxy?url=https://example.com/data.json', { method: 'GET' });
+  const resUnsignedBlocked = await worker.fetch(reqUnsignedBlocked, { HMAC_SECRET: 'test-secret', REQUIRE_HMAC: 'true' }, {});
+  assert.equal(resUnsignedBlocked.status, 403);
+  assert.ok((await resUnsignedBlocked.text()).includes('Missing required signature'));
+
+  // Standard mode allows unsigned request even when HMAC_SECRET is configured
+  const reqUnsignedAllowed = new Request('https://worker.test/proxy?url=http://127.0.0.1:8080/secret', { method: 'GET' });
+  const resUnsignedAllowed = await worker.fetch(reqUnsignedAllowed, { HMAC_SECRET: 'test-secret' }, {});
+  const textUnsignedAllowed = await resUnsignedAllowed.text();
+  assert.equal(resUnsignedAllowed.status, 403);
+  assert.ok(textUnsignedAllowed.includes('Security error: This host is not allowed'));
+  assert.equal(textUnsignedAllowed.includes('Missing required signature'), false);
 });
 
 test('HMAC Signing Endpoint (/sign)', async () => {
