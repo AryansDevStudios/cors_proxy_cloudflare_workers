@@ -7,4 +7,15 @@
   "observability": {
     "enabled": true
   }
+  // Optional bindings (uncomment if using):
+  // "r2_buckets": [
+  //   {
+  //     "binding": "R2_BUCKET",
+  //     "bucket_name": "cors-proxy-cache"
+  //   }
+  // ],
+  // "vars": {
+  //   "ALLOWED_ORIGINS": "https://example.com",
+  //   "R2_AUTO_PERSIST": "false"
+  // }
 }
