@@ -234,6 +234,16 @@ export const HTML_PAGE = `<!DOCTYPE html>
     color: var(--cyan);
     box-shadow: 0 2px 8px rgba(0,0,0,0.4);
   }
+  .segmented-btn.active.standard-active {
+    background: rgba(6, 182, 212, 0.2);
+    color: var(--cyan);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  }
+  .segmented-btn.active.encrypted-active {
+    background: rgba(245, 158, 11, 0.2);
+    color: var(--accent);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  }
 
   .grid-2 {
     display: grid;
@@ -784,18 +794,27 @@ export const HTML_PAGE = `<!DOCTYPE html>
       <!-- Live Proxied Link Card -->
       <div class="card">
         <div class="card-header">
-          <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-            <h2 class="card-title" style="margin:0;">
-              <span>⚡ Live Proxied Link</span>
-            </h2>
-            <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-size:0.78rem; font-weight:600; color:var(--accent); background:rgba(245, 158, 11, 0.1); border:1px solid rgba(245, 158, 11, 0.28); padding:3px 9px; border-radius:999px; user-select:none;" title="Stateless AES-256-GCM encrypted link (/s/...) concealing target URL, blur, rotate, and modifiers from recipients">
-              <input type="checkbox" id="token-opaque" style="width:auto; margin:0; cursor:pointer; accent-color:var(--accent);" />
-              <span>🔒 Opaque Token (/s/...)</span>
-            </label>
-          </div>
+          <h2 class="card-title">
+            <span>⚡ Live Proxied Link</span>
+          </h2>
           <div style="display:flex; gap:8px;">
             <button id="inspect-btn" class="cyan-btn" type="button">🔍 Inspect Headers</button>
             <button id="open-link-btn" type="button">↗ Open in Tab</button>
+          </div>
+        </div>
+
+        <!-- Link Format Two-Tab Selector -->
+        <div style="margin-bottom: 14px;">
+          <div class="segmented-control" id="link-format-segmented">
+            <button type="button" class="segmented-btn active standard-active" id="btn-format-standard" data-format="standard">
+              🌐 Standard Proxy (<code style="font-size:0.75rem;">/proxy?url=...</code>)
+            </button>
+            <button type="button" class="segmented-btn" id="btn-format-encrypted" data-format="encrypted">
+              🔒 Opaque Encrypted (<code style="font-size:0.75rem;">/s/...</code>)
+            </button>
+          </div>
+          <div class="field-desc" id="link-format-desc" style="margin-top:6px;">
+            🌐 <strong>Standard Link</strong>: Transparent query parameters. Target URL, blur, rotation, and headers are visible in the URL.
           </div>
         </div>
 
@@ -918,7 +937,9 @@ export const HTML_PAGE = `<!DOCTYPE html>
   const allowedOrigin = document.getElementById('allowed-origin');
   const hmacExpiry = document.getElementById('hmac-expiry');
   const hmacSecret = document.getElementById('hmac-secret');
-  const tokenOpaque = document.getElementById('token-opaque');
+  const btnFormatStandard = document.getElementById('btn-format-standard');
+  const btnFormatEncrypted = document.getElementById('btn-format-encrypted');
+  const linkFormatDesc = document.getElementById('link-format-desc');
 
   const imgWidth = document.getElementById('img-width');
   const imgHeight = document.getElementById('img-height');
@@ -942,12 +963,35 @@ export const HTML_PAGE = `<!DOCTYPE html>
   const toast = document.getElementById('toast');
 
   let activeDeliveryMode = 'attachment'; // 'attachment' or 'inline'
+  let activeLinkFormat = 'standard'; // 'standard' or 'encrypted'
 
   function showToast(msg) {
     toast.textContent = msg;
     toast.classList.add('show');
     setTimeout(() => toast.classList.remove('show'), 2000);
   }
+
+  // Link Format Segmented Control (Standard vs Encrypted)
+  btnFormatStandard.addEventListener('click', () => {
+    activeLinkFormat = 'standard';
+    btnFormatStandard.className = 'segmented-btn active standard-active';
+    btnFormatEncrypted.className = 'segmented-btn';
+    linkFormatDesc.innerHTML = '🌐 <strong>Standard Link</strong>: Transparent query parameters. Target URL, blur, rotation, and headers are visible in the URL.';
+    updateLiveProxy();
+  });
+
+  btnFormatEncrypted.addEventListener('click', () => {
+    activeLinkFormat = 'encrypted';
+    btnFormatEncrypted.className = 'segmented-btn active encrypted-active';
+    btnFormatStandard.className = 'segmented-btn';
+    linkFormatDesc.innerHTML = '🔒 <strong>Encrypted Opaque Link</strong>: Stateless AES-256-GCM token (<code style="color:var(--cyan);">/s/...</code>). Origin URL and all modifiers are completely sealed &amp; tamper-proof.';
+    if (!hmacSecret.value.trim()) {
+      if (advancedDetails) advancedDetails.open = true;
+      hmacSecret.focus();
+      showToast('Enter Secret Key in Security options to generate token');
+    }
+    updateLiveProxy();
+  });
 
   // Delivery Mode Toggle
   btnModeDownload.addEventListener('click', () => {
@@ -1069,12 +1113,12 @@ export const HTML_PAGE = `<!DOCTYPE html>
     }
 
     // Check if Opaque Encrypted Token mode is active
-    if (tokenOpaque && tokenOpaque.checked) {
+    if (activeLinkFormat === 'encrypted') {
       const secret = hmacSecret.value.trim();
       metaPillEncrypted.style.display = 'inline-block';
 
       if (!secret) {
-        outputUrl.value = '⚠️ Please enter a Secret Key in Security options to generate an encrypted token.';
+        outputUrl.value = '⚠️ Please enter a Secret Key in Security options on the left to generate an encrypted token.';
         metaPillEncrypted.textContent = '🔒 Key Required';
         metaPillEncrypted.className = 'meta-pill';
         updateCodeSnippets('');
@@ -1296,7 +1340,7 @@ export const HTML_PAGE = `<!DOCTYPE html>
     inputUrl, fallbackUrl, filenameInput,
     refererMode, customReferer, customHeaders,
     mimeOverride, compressMode, replaceFrom, replaceTo,
-    cacheTtl, allowedOrigin, hmacExpiry, hmacSecret, tokenOpaque,
+    cacheTtl, allowedOrigin, hmacExpiry, hmacSecret,
     imgWidth, imgHeight, imgFit, imgFormat, imgQuality, imgBlur, imgRotate, imgEngine
   ];
 
@@ -1335,17 +1379,6 @@ export const HTML_PAGE = `<!DOCTYPE html>
   document.getElementById('open-link-btn').addEventListener('click', () => {
     if (outputUrl.value) window.open(outputUrl.value, '_blank');
   });
-
-  // Opaque Token helper: auto-expand and focus Secret Key if empty
-  if (tokenOpaque) {
-    tokenOpaque.addEventListener('change', () => {
-      if (tokenOpaque.checked && !hmacSecret.value.trim()) {
-        if (advancedDetails) advancedDetails.open = true;
-        hmacSecret.focus();
-        showToast('Enter Secret Key in Security options to generate token');
-      }
-    });
-  }
 
   // Snippet Tabs
   document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -1472,7 +1505,7 @@ export const HTML_PAGE = `<!DOCTYPE html>
         allowedOrigin: allowedOrigin.value,
         hmacExpiry: hmacExpiry.value,
         hmacSecret: hmacSecret.value,
-        tokenOpaque: tokenOpaque ? tokenOpaque.checked : false,
+        linkFormat: activeLinkFormat,
         advancedOpen: advancedDetails ? advancedDetails.open : false,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -1527,7 +1560,18 @@ export const HTML_PAGE = `<!DOCTYPE html>
       if (data.allowedOrigin !== undefined) allowedOrigin.value = data.allowedOrigin;
       if (data.hmacExpiry !== undefined) hmacExpiry.value = data.hmacExpiry;
       if (data.hmacSecret !== undefined) hmacSecret.value = data.hmacSecret;
-      if (data.tokenOpaque !== undefined && tokenOpaque) tokenOpaque.checked = Boolean(data.tokenOpaque);
+
+      if (data.linkFormat === 'encrypted') {
+        activeLinkFormat = 'encrypted';
+        btnFormatEncrypted.className = 'segmented-btn active encrypted-active';
+        btnFormatStandard.className = 'segmented-btn';
+        linkFormatDesc.innerHTML = '🔒 <strong>Encrypted Opaque Link</strong>: Stateless AES-256-GCM token (<code style="color:var(--cyan);">/s/...</code>). Origin URL and all modifiers are completely sealed &amp; tamper-proof.';
+      } else {
+        activeLinkFormat = 'standard';
+        btnFormatStandard.className = 'segmented-btn active standard-active';
+        btnFormatEncrypted.className = 'segmented-btn';
+        linkFormatDesc.innerHTML = '🌐 <strong>Standard Link</strong>: Transparent query parameters. Target URL, blur, rotation, and headers are visible in the URL.';
+      }
 
       if (data.advancedOpen && advancedDetails) {
         advancedDetails.open = true;
@@ -1572,7 +1616,11 @@ export const HTML_PAGE = `<!DOCTYPE html>
     allowedOrigin.value = '';
     hmacExpiry.value = 'none';
     hmacSecret.value = '';
-    if (tokenOpaque) tokenOpaque.checked = false;
+
+    activeLinkFormat = 'standard';
+    btnFormatStandard.className = 'segmented-btn active standard-active';
+    btnFormatEncrypted.className = 'segmented-btn';
+    linkFormatDesc.innerHTML = '🌐 <strong>Standard Link</strong>: Transparent query parameters. Target URL, blur, rotation, and headers are visible in the URL.';
 
     if (advancedDetails) advancedDetails.open = false;
 
