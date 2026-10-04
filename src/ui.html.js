@@ -1058,7 +1058,7 @@ export const HTML_PAGE = `<!DOCTYPE html>
   function bufferToBase64Url(bytes) {
     let binary = '';
     for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
   }
 
   async function computeAesGcmToken(payload, secret) {
