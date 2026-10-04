@@ -1,10 +1,11 @@
 /**
  * Developer Experience UI Module
- * Serves the modern, feature-rich developer dashboard with:
- * - Live link generator with native platform detection
- * - Code snippet generator (cURL, JavaScript Fetch, Python Requests)
- * - Live HTTP Header Inspector drawer with latency and status badges
- * - Full controls for headers, spoofing, overrides, compression, HMAC signing, and caching
+ * Serves the modern, reactive developer dashboard with:
+ * - Real-time zero-click link generation (updates live on any keystroke or toggle)
+ * - Modern segmented delivery toggle (Download vs Browser Native View)
+ * - Streamlined primary card with clean "Advanced Options" grouping
+ * - Live code snippets (cURL, JavaScript Fetch, Python Requests)
+ * - Live HTTP Header Inspector drawer with latency and status breakdown
  */
 
 export const HTML_PAGE = `<!DOCTYPE html>
@@ -15,27 +16,29 @@ export const HTML_PAGE = `<!DOCTYPE html>
 <title>Universal CORS Proxy — Cloudflare Workers Edge</title>
 <style>
   :root {
-    --bg: #090d10;
-    --panel: #11171c;
-    --panel-border: rgba(255, 255, 255, 0.09);
-    --panel-hover: #161e24;
-    --input-bg: #0a0f13;
-    --text: #f0f4f6;
-    --muted: #8b99a0;
+    --bg: #070a0d;
+    --panel: #0f151a;
+    --panel-border: rgba(255, 255, 255, 0.08);
+    --panel-hover: #151e24;
+    --input-bg: #090d11;
+    --text: #f1f5f9;
+    --muted: #94a3b8;
     --accent: #f59e0b;
-    --accent-hover: #fbbf24;
-    --accent-ink: #181100;
+    --accent-glow: rgba(245, 158, 11, 0.25);
+    --accent-ink: #140d00;
     --cyan: #06b6d4;
     --green: #10b981;
     --red: #ef4444;
-    --radius: 8px;
-    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --radius-lg: 12px;
+    --radius-md: 8px;
+    --radius-sm: 6px;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0;
     min-height: 100vh;
-    background: var(--bg);
+    background: radial-gradient(circle at top center, #111a22 0%, var(--bg) 70%);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     padding: 32px 16px;
@@ -44,12 +47,14 @@ export const HTML_PAGE = `<!DOCTYPE html>
   }
   .container {
     width: 100%;
-    max-width: 860px;
+    max-width: 880px;
   }
+
+  /* Header */
   header {
     margin-bottom: 24px;
     border-bottom: 1px solid var(--panel-border);
-    padding-bottom: 16px;
+    padding-bottom: 20px;
   }
   .title-row {
     display: flex;
@@ -59,58 +64,70 @@ export const HTML_PAGE = `<!DOCTYPE html>
     gap: 12px;
   }
   h1 {
-    font-size: 1.35rem;
+    font-size: 1.45rem;
     font-weight: 700;
     margin: 0;
     display: flex;
     align-items: center;
     gap: 10px;
+    letter-spacing: -0.3px;
     color: #fff;
+  }
+  .badges {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
   }
   .badge {
     font-size: 0.72rem;
     font-weight: 600;
-    padding: 3px 8px;
-    border-radius: 4px;
-    background: rgba(245, 158, 11, 0.15);
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: rgba(245, 158, 11, 0.12);
     color: var(--accent);
     border: 1px solid rgba(245, 158, 11, 0.3);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
   }
   .badge.green {
-    background: rgba(16, 185, 129, 0.15);
+    background: rgba(16, 185, 129, 0.12);
     color: var(--green);
     border-color: rgba(16, 185, 129, 0.3);
   }
   .badge.cyan {
-    background: rgba(6, 182, 212, 0.15);
+    background: rgba(6, 182, 212, 0.12);
     color: var(--cyan);
     border-color: rgba(6, 182, 212, 0.3);
   }
   p.subtitle {
     color: var(--muted);
     font-size: 0.88rem;
-    margin: 6px 0 0;
-    line-height: 1.45;
+    margin: 8px 0 0;
+    line-height: 1.5;
   }
 
+  /* Cards */
   .card {
     background: var(--panel);
     border: 1px solid var(--panel-border);
-    border-radius: var(--radius);
+    border-radius: var(--radius-lg);
     padding: 22px;
     margin-bottom: 20px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   }
-  .card-title {
-    font-size: 0.95rem;
-    font-weight: 600;
-    margin: 0 0 16px;
-    color: #fff;
+  .card-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .card-title {
+    font-size: 0.96rem;
+    font-weight: 600;
+    margin: 0;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
   label {
@@ -122,9 +139,10 @@ export const HTML_PAGE = `<!DOCTYPE html>
   }
   label:first-child { margin-top: 0; }
   .field-desc {
-    font-size: 0.75rem;
+    font-size: 0.74rem;
     color: #64748b;
-    margin-top: 3px;
+    margin-top: 4px;
+    line-height: 1.4;
   }
 
   input, select, textarea {
@@ -132,68 +150,157 @@ export const HTML_PAGE = `<!DOCTYPE html>
     background: var(--input-bg);
     border: 1px solid var(--panel-border);
     color: var(--text);
-    padding: 9px 12px;
-    border-radius: 6px;
+    padding: 10px 13px;
+    border-radius: var(--radius-md);
     font-family: var(--font-mono);
     font-size: 0.84rem;
-    transition: border-color 0.15s, outline 0.15s;
+    transition: all 0.15s ease;
   }
   input:focus, select:focus, textarea:focus {
     outline: none;
     border-color: var(--accent);
-    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+    box-shadow: 0 0 0 3px var(--accent-glow);
   }
-  textarea { resize: vertical; min-height: 56px; }
+  textarea { resize: vertical; min-height: 60px; }
 
-  .row-2 {
+  .input-with-button {
+    display: flex;
+    gap: 8px;
+  }
+
+  /* Segmented Toggle for Delivery Mode */
+  .segmented-control {
+    display: inline-flex;
+    background: var(--input-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-md);
+    padding: 3px;
+    gap: 3px;
+    width: 100%;
+  }
+  .segmented-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .segmented-btn:hover { color: var(--text); }
+  .segmented-btn.active {
+    background: #1e293b;
+    color: #fff;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  }
+  .segmented-btn.active.download-active {
+    background: rgba(245, 158, 11, 0.18);
+    color: var(--accent);
+  }
+  .segmented-btn.active.inline-active {
+    background: rgba(6, 182, 212, 0.18);
+    color: var(--cyan);
+  }
+
+  .grid-2 {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 14px;
   }
   @media (max-width: 640px) {
-    .row-2 { grid-template-columns: 1fr; }
+    .grid-2 { grid-template-columns: 1fr; }
   }
 
-  details {
-    background: rgba(0,0,0,0.18);
+  /* Advanced Options Accordion */
+  details.advanced-card {
+    background: rgba(0, 0, 0, 0.2);
     border: 1px solid var(--panel-border);
-    border-radius: 6px;
-    margin-top: 14px;
+    border-radius: var(--radius-lg);
+    margin-top: 18px;
     overflow: hidden;
+    transition: border-color 0.2s;
   }
-  summary {
-    padding: 10px 14px;
-    font-size: 0.82rem;
+  details.advanced-card[open] {
+    border-color: rgba(255, 255, 255, 0.16);
+  }
+  details.advanced-card > summary {
+    padding: 14px 18px;
+    font-size: 0.86rem;
     font-weight: 600;
-    color: var(--muted);
+    color: var(--text);
     cursor: pointer;
     user-select: none;
     display: flex;
     align-items: center;
-    gap: 8px;
+    justify-content: space-between;
     background: rgba(255, 255, 255, 0.02);
+    transition: background 0.15s;
   }
-  summary:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
-  .details-body {
-    padding: 14px;
+  details.advanced-card > summary:hover {
+    background: rgba(255, 255, 255, 0.04);
+  }
+  .advanced-body {
+    padding: 20px;
     border-top: 1px solid var(--panel-border);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .sub-section {
+    background: rgba(255, 255, 255, 0.015);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-md);
+    padding: 16px;
+  }
+  .sub-title {
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: #e2e8f0;
+    margin: 0 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
-  .btn-group {
+  /* Live Output Banner */
+  .output-box {
+    position: relative;
+    margin-top: 6px;
+  }
+  .output-textarea {
+    font-size: 0.84rem;
+    line-height: 1.45;
+    background: #06090c;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    color: #f8fafc;
+    padding: 12px 14px;
+    border-radius: var(--radius-md);
+    word-break: break-all;
+    min-height: 56px;
+  }
+
+  .btn-row {
     display: flex;
-    gap: 10px;
-    margin-top: 20px;
+    gap: 8px;
+    margin-top: 12px;
     flex-wrap: wrap;
   }
   button {
     background: var(--panel-hover);
     border: 1px solid var(--panel-border);
     color: var(--text);
-    padding: 9px 16px;
-    border-radius: 6px;
+    padding: 9px 15px;
+    border-radius: var(--radius-md);
     cursor: pointer;
-    font-size: 0.85rem;
-    font-weight: 500;
+    font-size: 0.84rem;
+    font-weight: 600;
     transition: all 0.15s ease;
     display: inline-flex;
     align-items: center;
@@ -208,19 +315,18 @@ export const HTML_PAGE = `<!DOCTYPE html>
     border-color: var(--accent);
     color: var(--accent-ink);
     font-weight: 700;
-    flex: 1;
   }
   button.primary:hover {
     background: var(--accent-hover);
     border-color: var(--accent-hover);
-    filter: none;
+    box-shadow: 0 0 15px var(--accent-glow);
   }
   button.cyan-btn {
     border-color: rgba(6, 182, 212, 0.4);
     color: var(--cyan);
   }
   button.cyan-btn:hover {
-    background: rgba(6, 182, 212, 0.1);
+    background: rgba(6, 182, 212, 0.12);
   }
 
   /* Code Tabs */
@@ -228,7 +334,7 @@ export const HTML_PAGE = `<!DOCTYPE html>
     display: flex;
     gap: 6px;
     border-bottom: 1px solid var(--panel-border);
-    margin-bottom: 12px;
+    margin: 18px 0 12px;
   }
   .tab-btn {
     background: transparent;
@@ -245,12 +351,11 @@ export const HTML_PAGE = `<!DOCTYPE html>
     color: var(--accent);
     border-bottom-color: var(--accent);
   }
-
   pre {
-    background: var(--input-bg);
+    background: #06090c;
     border: 1px solid var(--panel-border);
     padding: 14px;
-    border-radius: 6px;
+    border-radius: var(--radius-md);
     overflow-x: auto;
     font-family: var(--font-mono);
     font-size: 0.8rem;
@@ -259,7 +364,7 @@ export const HTML_PAGE = `<!DOCTYPE html>
     line-height: 1.45;
   }
 
-  /* Inspector Drawer / Modal */
+  /* Live Inspector Drawer / Modal */
   #inspector-modal {
     display: none;
     position: fixed;
@@ -267,7 +372,7 @@ export const HTML_PAGE = `<!DOCTYPE html>
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.75);
     backdrop-filter: blur(4px);
     z-index: 100;
     align-items: center;
@@ -278,13 +383,13 @@ export const HTML_PAGE = `<!DOCTYPE html>
   .inspector-card {
     background: var(--panel);
     border: 1px solid var(--panel-border);
-    border-radius: 10px;
+    border-radius: var(--radius-lg);
     width: 100%;
-    max-width: 720px;
+    max-width: 740px;
     max-height: 88vh;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 15px 50px rgba(0, 0, 0, 0.6);
   }
   .inspector-header {
     padding: 16px 20px;
@@ -307,7 +412,7 @@ export const HTML_PAGE = `<!DOCTYPE html>
     background: var(--input-bg);
     border: 1px solid var(--panel-border);
     padding: 10px 12px;
-    border-radius: 6px;
+    border-radius: var(--radius-md);
   }
   .stat-label {
     font-size: 0.7rem;
@@ -322,7 +427,6 @@ export const HTML_PAGE = `<!DOCTYPE html>
     color: #fff;
     font-family: var(--font-mono);
   }
-
   table.headers-table {
     width: 100%;
     border-collapse: collapse;
@@ -346,24 +450,45 @@ export const HTML_PAGE = `<!DOCTYPE html>
     width: 35%;
   }
 
+  /* Live Pulse Indicator */
+  .live-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.72rem;
+    color: var(--green);
+    font-weight: 600;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+  .pulse-dot {
+    width: 6px;
+    height: 6px;
+    background: var(--green);
+    border-radius: 50%;
+    box-shadow: 0 0 6px var(--green);
+  }
+
   #toast {
     position: fixed;
     bottom: 24px;
     left: 50%;
-    transform: translateX(-50%);
+    transform: translate(-50%, 8px);
     background: var(--accent);
     color: var(--accent-ink);
-    padding: 9px 18px;
-    border-radius: 6px;
+    padding: 9px 20px;
+    border-radius: var(--radius-md);
     font-size: 0.85rem;
     font-weight: 700;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5);
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.2s ease, transform 0.2s ease;
     z-index: 200;
   }
-  #toast.show { opacity: 1; transform: translate(-50%, -4px); }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
 </style>
 </head>
 <body>
@@ -371,252 +496,268 @@ export const HTML_PAGE = `<!DOCTYPE html>
   <header>
     <div class="title-row">
       <h1>Universal CORS Proxy</h1>
-      <div style="display:flex; gap:6px;">
+      <div class="badges">
+        <span class="live-pill"><span class="pulse-dot"></span> REAL-TIME SYNC</span>
         <span class="badge">Edge Streams</span>
         <span class="badge green">Web Crypto</span>
-        <span class="badge cyan">Smart Resolvers</span>
+        <span class="badge cyan">Image Engine</span>
       </div>
     </div>
-    <p class="subtitle">High-performance edge proxy with on-the-fly streaming transforms, HMAC signed expiring links, smart platform unwrapping, and live header inspection.</p>
+    <p class="subtitle">Real-time edge proxy generator with on-the-fly streaming transforms, image resizing, HMAC signed links, and instant code snippets.</p>
   </header>
 
-  <!-- URL & Main Form -->
+  <!-- Main Config Card -->
   <div class="card">
-    <div class="card-title">
-      <span>1. Target Source & Mirrors</span>
+    <div class="card-header">
+      <h2 class="card-title">
+        <span>Target Source URL</span>
+      </h2>
       <span id="detected-platform" class="badge cyan" style="display:none;"></span>
     </div>
 
-    <label for="input-url">Primary Source URL</label>
-    <div style="display:flex; gap:8px;">
-      <input type="text" id="input-url" placeholder="https://drive.google.com/file/d/... or raw GitHub/Dropbox/file link" />
-      <button id="paste-btn" type="button" title="Paste from clipboard">Paste</button>
+    <!-- Primary Source URL Input -->
+    <div class="input-with-button">
+      <input type="text" id="input-url" autofocus placeholder="https://example.com/asset.pdf or Google Drive, Dropbox, Box, GitHub link..." />
+      <button id="paste-btn" type="button" title="Paste from clipboard">📋 Paste</button>
     </div>
-    <div class="field-desc">Supports direct files, Google Drive, Dropbox, Box, OneDrive, SharePoint, GitHub/GitLab raw & releases.</div>
+    <div class="field-desc">Supports direct files, Google Drive (virus-scan bypass), Dropbox, OneDrive, Box, GitHub, GitLab, and direct media streams.</div>
 
-    <label for="fallback-url">Fallback / Backup Mirror URL (optional)</label>
-    <input type="text" id="fallback-url" placeholder="https://mirror.cdn.com/fallback-asset.pdf" />
-    <div class="field-desc">If the primary URL returns 404, 5xx, or network failure, the worker automatically retries this secondary mirror.</div>
-
-    <!-- Accordion 1: Advanced Headers & Spoofing -->
-    <details>
-      <summary>Advanced Headers & Anti-Hotlink Spoofing</summary>
-      <div class="details-body">
-        <div class="row-2">
-          <div>
-            <label for="referer-mode">Referer Spoofing</label>
-            <select id="referer-mode">
-              <option value="auto">Auto (Spoof to Upstream Origin)</option>
-              <option value="strip">Strip Referer (Omit completely)</option>
-              <option value="custom">Custom Referer URL</option>
-            </select>
-          </div>
-          <div>
-            <label for="custom-referer">Custom Referer (if Custom selected)</label>
-            <input type="text" id="custom-referer" placeholder="https://upstream.com/" disabled />
-          </div>
+    <!-- Quick Settings: Delivery Mode Toggle & Filename -->
+    <div class="grid-2" style="margin-top: 16px;">
+      <div>
+        <label>Browser Action / Delivery Mode</label>
+        <div class="segmented-control" id="delivery-segmented">
+          <button type="button" class="segmented-btn active download-active" id="btn-mode-download" data-mode="attachment">
+            📥 Download File
+          </button>
+          <button type="button" class="segmented-btn" id="btn-mode-inline" data-mode="inline">
+            👁️ Open in Browser
+          </button>
         </div>
-
-        <label for="custom-headers">Custom Upstream Request Headers (JSON)</label>
-        <textarea id="custom-headers" placeholder='{"Authorization": "Bearer token", "User-Agent": "CustomBot"}'></textarea>
-        <div class="field-desc">Inject custom headers for resources behind bearer tokens, basic auth, or private API gates.</div>
+        <div class="field-desc" id="delivery-desc">Forces Content-Disposition: attachment for downloads.</div>
       </div>
-    </details>
 
-    <!-- Accordion 2: Edge Transforms & Overrides -->
-    <details>
-      <summary>Edge Transformations & Payload Overrides</summary>
-      <div class="details-body">
-        <div class="row-2">
-          <div>
-            <label for="disposition-mode">Content-Disposition</label>
-            <select id="disposition-mode">
-              <option value="attachment">Download (attachment)</option>
-              <option value="inline">Browser Preview (inline)</option>
-            </select>
-          </div>
-          <div>
-            <label for="filename">Custom Filename Override</label>
-            <input type="text" id="filename" placeholder="document.pdf" />
-          </div>
-        </div>
-
-        <div class="row-2">
-          <div>
-            <label for="mime-override">MIME-Type Override</label>
-            <input type="text" id="mime-override" placeholder="application/pdf, video/mp4, text/plain (optional)" />
-          </div>
-          <div>
-            <label for="compress-mode">Edge Compression</label>
-            <select id="compress-mode">
-              <option value="none">None (Preserve Original)</option>
-              <option value="gzip">gzip (Stream Compress)</option>
-              <option value="deflate">deflate (Stream Compress)</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="row-2">
-          <div>
-            <label for="replace-from">Text/JSON Find Pattern (Regex or String)</label>
-            <input type="text" id="replace-from" placeholder="e.g. api.old.com or https://v1/" />
-          </div>
-          <div>
-            <label for="replace-to">Replacement String</label>
-            <input type="text" id="replace-to" placeholder="e.g. api.new.com or https://v2/" />
-          </div>
-        </div>
+      <div>
+        <label for="filename">Custom Filename (optional)</label>
+        <input type="text" id="filename" placeholder="e.g. document.pdf" />
+        <div class="field-desc">Sets the downloaded file name with UTF-8 RFC 5987 encoding.</div>
       </div>
-    </details>
-
-    <!-- Accordion: On-the-Fly Image Resizing -->
-    <details>
-      <summary>On-the-Fly Image Resizing & Format Conversion</summary>
-      <div class="details-body">
-        <div class="row-2">
-          <div>
-            <label for="img-width">Width (px)</label>
-            <input type="number" id="img-width" placeholder="e.g. 800 (optional)" min="1" />
-          </div>
-          <div>
-            <label for="img-height">Height (px)</label>
-            <input type="number" id="img-height" placeholder="e.g. 600 (optional)" min="1" />
-          </div>
-        </div>
-
-        <div class="row-2">
-          <div>
-            <label for="img-fit">Fit Mode</label>
-            <select id="img-fit">
-              <option value="scale-down">scale-down (Preserve aspect, downscale only)</option>
-              <option value="cover">cover (Crop to cover dimensions)</option>
-              <option value="contain">contain (Fit entirely inside dimensions)</option>
-              <option value="crop">crop (Extract exact bounds)</option>
-              <option value="pad">pad (Pad canvas with background)</option>
-            </select>
-          </div>
-          <div>
-            <label for="img-format">Output Format</label>
-            <select id="img-format">
-              <option value="">Auto (Original format)</option>
-              <option value="webp">WebP (High efficiency)</option>
-              <option value="avif">AVIF (Next-gen compression)</option>
-              <option value="jpeg">JPEG</option>
-              <option value="png">PNG</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="row-2">
-          <div>
-            <label for="img-quality">Quality (1-100)</label>
-            <input type="number" id="img-quality" placeholder="85" min="1" max="100" />
-          </div>
-          <div>
-            <label for="img-blur">Blur (0-250)</label>
-            <input type="number" id="img-blur" placeholder="0 (No blur)" min="0" max="250" />
-          </div>
-        </div>
-
-        <div class="row-2">
-          <div>
-            <label for="img-rotate">Rotate</label>
-            <select id="img-rotate">
-              <option value="">0° (No rotation)</option>
-              <option value="90">90°</option>
-              <option value="180">180°</option>
-              <option value="270">270°</option>
-            </select>
-          </div>
-          <div>
-            <label for="img-engine">Resizing Engine</label>
-            <select id="img-engine">
-              <option value="auto">Auto (Cloudflare cf.image + wsrv.nl fallback)</option>
-              <option value="cf">Cloudflare Native Edge (cf.image)</option>
-              <option value="wsrv">wsrv.nl Edge Engine</option>
-            </select>
-          </div>
-        </div>
-      </div>
-    </details>
-
-    <!-- Accordion 3: Security, HMAC Signing & Caching -->
-    <details>
-      <summary>Security, HMAC Signed Links & Caching</summary>
-      <div class="details-body">
-        <div class="row-2">
-          <div>
-            <label for="cache-ttl">Edge Cache TTL</label>
-            <select id="cache-ttl">
-              <option value="86400">1 Day (86400s - Standard)</option>
-              <option value="3600">1 Hour (3600s)</option>
-              <option value="604800">7 Days (604800s)</option>
-              <option value="0">Bypass Edge Cache</option>
-            </select>
-          </div>
-          <div>
-            <label for="allowed-origin">Origin Whitelist Lock (Embed gate)</label>
-            <input type="text" id="allowed-origin" placeholder="https://mysite.com (optional)" />
-          </div>
-        </div>
-
-        <div class="row-2">
-          <div>
-            <label for="hmac-expiry">HMAC Link Expiration Duration</label>
-            <select id="hmac-expiry">
-              <option value="none">No Expiry (Open link)</option>
-              <option value="3600">Expires in 1 Hour</option>
-              <option value="86400">Expires in 24 Hours</option>
-              <option value="604800">Expires in 7 Days</option>
-            </select>
-          </div>
-          <div>
-            <label for="hmac-secret">HMAC Secret Key (for Tamper-proof Signing)</label>
-            <input type="password" id="hmac-secret" placeholder="Your secret key..." />
-          </div>
-        </div>
-      </div>
-    </details>
-
-    <div class="btn-group">
-      <button class="primary" id="generate-btn" type="button">Generate Proxied Link</button>
-      <button class="cyan-btn" id="inspect-btn" type="button">Inspect Headers</button>
     </div>
+
+    <!-- Collapsible Advanced Options -->
+    <details class="advanced-card" id="advanced-details">
+      <summary>
+        <span>⚙️ Advanced Options <span style="font-weight:400; color:var(--muted); font-size:0.78rem;">(Fallback Mirror, Image Resizing, Headers, Security)</span></span>
+        <span style="font-size:0.8rem; color:var(--muted);">&#x25BC;</span>
+      </summary>
+
+      <div class="advanced-body">
+        <!-- 1. Fallback & Backup Mirror -->
+        <div class="sub-section">
+          <div class="sub-title">🔄 Fallback & Backup Mirror URL</div>
+          <label for="fallback-url">Fallback / Mirror URL (Optional)</label>
+          <input type="text" id="fallback-url" placeholder="https://backup-mirror.cdn.com/asset.pdf" />
+          <div class="field-desc">If the primary URL returns 404, 5xx, or network failure, the proxy seamlessly serves from this backup mirror.</div>
+        </div>
+
+        <!-- 2. On-the-Fly Image Resizing -->
+        <div class="sub-section">
+          <div class="sub-title">🖼️ On-the-Fly Image Resizing & Format Conversion</div>
+          <div class="grid-2">
+            <div>
+              <label for="img-width">Width (px)</label>
+              <input type="number" id="img-width" placeholder="e.g. 800" min="1" />
+            </div>
+            <div>
+              <label for="img-height">Height (px)</label>
+              <input type="number" id="img-height" placeholder="e.g. 600" min="1" />
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div>
+              <label for="img-fit">Fit Mode</label>
+              <select id="img-fit">
+                <option value="scale-down">scale-down (Preserve aspect, downscale only)</option>
+                <option value="cover">cover (Crop to cover dimensions)</option>
+                <option value="contain">contain (Fit entirely inside dimensions)</option>
+                <option value="crop">crop (Extract exact bounds)</option>
+                <option value="pad">pad (Pad canvas with background)</option>
+              </select>
+            </div>
+            <div>
+              <label for="img-format">Output Format</label>
+              <select id="img-format">
+                <option value="">Auto (Original format)</option>
+                <option value="webp">WebP (High efficiency)</option>
+                <option value="avif">AVIF (Next-gen compression)</option>
+                <option value="jpeg">JPEG</option>
+                <option value="png">PNG</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div>
+              <label for="img-quality">Quality (1-100)</label>
+              <input type="number" id="img-quality" placeholder="85" min="1" max="100" />
+            </div>
+            <div>
+              <label for="img-blur">Blur (0-250)</label>
+              <input type="number" id="img-blur" placeholder="0 (No blur)" min="0" max="250" />
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div>
+              <label for="img-rotate">Rotate</label>
+              <select id="img-rotate">
+                <option value="">0° (No rotation)</option>
+                <option value="90">90°</option>
+                <option value="180">180°</option>
+                <option value="270">270°</option>
+              </select>
+            </div>
+            <div>
+              <label for="img-engine">Engine</label>
+              <select id="img-engine">
+                <option value="auto">Auto (Cloudflare cf.image + wsrv.nl fallback)</option>
+                <option value="cf">Cloudflare Native Edge (cf.image)</option>
+                <option value="wsrv">wsrv.nl Edge Engine</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Headers & Spoofing -->
+        <div class="sub-section">
+          <div class="sub-title">🛡️ Headers & Anti-Hotlink Spoofing</div>
+          <div class="grid-2">
+            <div>
+              <label for="referer-mode">Referer Spoofing</label>
+              <select id="referer-mode">
+                <option value="auto">Auto (Spoof to Upstream Origin)</option>
+                <option value="strip">Strip Referer (Omit completely)</option>
+                <option value="custom">Custom Referer URL</option>
+              </select>
+            </div>
+            <div>
+              <label for="custom-referer">Custom Referer URL</label>
+              <input type="text" id="custom-referer" placeholder="https://upstream.com/" disabled />
+            </div>
+          </div>
+
+          <label for="custom-headers">Custom Upstream Request Headers (JSON)</label>
+          <textarea id="custom-headers" placeholder='{"Authorization": "Bearer token", "User-Agent": "CustomBot"}'></textarea>
+        </div>
+
+        <!-- 4. Transforms & Overrides -->
+        <div class="sub-section">
+          <div class="sub-title">⚡ Transforms & MIME Overrides</div>
+          <div class="grid-2">
+            <div>
+              <label for="mime-override">MIME-Type Override</label>
+              <input type="text" id="mime-override" placeholder="application/pdf, video/mp4, text/plain" />
+            </div>
+            <div>
+              <label for="compress-mode">Edge Compression</label>
+              <select id="compress-mode">
+                <option value="none">None (Preserve Original)</option>
+                <option value="gzip">gzip (Stream Compress)</option>
+                <option value="deflate">deflate (Stream Compress)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div>
+              <label for="replace-from">Text/JSON Find Pattern (Regex/String)</label>
+              <input type="text" id="replace-from" placeholder="e.g. api.old.com" />
+            </div>
+            <div>
+              <label for="replace-to">Replacement String</label>
+              <input type="text" id="replace-to" placeholder="e.g. api.new.com" />
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. Security & Caching -->
+        <div class="sub-section">
+          <div class="sub-title">🔒 Security, HMAC Signing & Caching</div>
+          <div class="grid-2">
+            <div>
+              <label for="cache-ttl">Edge Cache TTL</label>
+              <select id="cache-ttl">
+                <option value="86400">1 Day (86400s - Standard)</option>
+                <option value="3600">1 Hour (3600s)</option>
+                <option value="604800">7 Days (604800s)</option>
+                <option value="0">Bypass Edge Cache</option>
+              </select>
+            </div>
+            <div>
+              <label for="allowed-origin">Origin Lock (Embed Gate)</label>
+              <input type="text" id="allowed-origin" placeholder="https://mysite.com (optional)" />
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div>
+              <label for="hmac-expiry">HMAC Link Expiration</label>
+              <select id="hmac-expiry">
+                <option value="none">No Expiry (Open link)</option>
+                <option value="3600">Expires in 1 Hour</option>
+                <option value="86400">Expires in 24 Hours</option>
+                <option value="604800">Expires in 7 Days</option>
+              </select>
+            </div>
+            <div>
+              <label for="hmac-secret">HMAC Secret Key</label>
+              <input type="password" id="hmac-secret" placeholder="Your HMAC secret key..." />
+            </div>
+          </div>
+        </div>
+      </div>
+    </details>
   </div>
 
-  <!-- Generated Output & Snippets -->
-  <div class="card" id="output-card" style="display:none;">
-    <div class="card-title">
-      <span>2. Proxied Link & Code Snippets</span>
-      <button id="open-link-btn" type="button" style="padding:4px 10px; font-size:0.75rem;">Open Link &#8599;</button>
+  <!-- Real-Time Generated Link & Snippets -->
+  <div class="card" id="output-card">
+    <div class="card-header">
+      <h2 class="card-title">
+        <span>⚡ Live Proxied Link</span>
+      </h2>
+      <div style="display:flex; gap:8px;">
+        <button id="inspect-btn" class="cyan-btn" type="button">🔍 Inspect Headers</button>
+        <button id="open-link-btn" type="button">↗ Open in Tab</button>
+      </div>
     </div>
 
-    <label for="output-url">Proxied URL</label>
-    <textarea id="output-url" readonly></textarea>
-    <div class="btn-group" style="margin-top:10px;">
-      <button id="copy-link-btn" class="primary" type="button">Copy Proxied Link</button>
+    <div class="output-box">
+      <textarea id="output-url" class="output-textarea" readonly placeholder="Enter a URL above to generate your live proxy link..."></textarea>
     </div>
 
-    <!-- Snippets Tabs -->
-    <div style="margin-top:24px;">
-      <div class="tabs">
-        <button class="tab-btn active" data-tab="curl">cURL</button>
-        <button class="tab-btn" data-tab="fetch">JavaScript (fetch)</button>
-        <button class="tab-btn" data-tab="python">Python (requests)</button>
-      </div>
+    <div class="btn-row">
+      <button id="copy-link-btn" class="primary" type="button" style="flex:1;">📋 Copy Proxied Link</button>
+    </div>
 
-      <div id="tab-curl" class="tab-content">
-        <pre><code id="code-curl"></code></pre>
-        <button type="button" class="copy-snippet-btn" data-target="code-curl">Copy cURL</button>
-      </div>
-      <div id="tab-fetch" class="tab-content" style="display:none;">
-        <pre><code id="code-fetch"></code></pre>
-        <button type="button" class="copy-snippet-btn" data-target="code-fetch">Copy Fetch Snippet</button>
-      </div>
-      <div id="tab-python" class="tab-content" style="display:none;">
-        <pre><code id="code-python"></code></pre>
-        <button type="button" class="copy-snippet-btn" data-target="code-python">Copy Python Snippet</button>
-      </div>
+    <!-- Code Snippet Tabs -->
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="curl">cURL</button>
+      <button class="tab-btn" data-tab="fetch">JavaScript (fetch)</button>
+      <button class="tab-btn" data-tab="python">Python (requests)</button>
+    </div>
+
+    <div id="tab-curl" class="tab-content">
+      <pre><code id="code-curl"></code></pre>
+      <button type="button" class="copy-snippet-btn" data-target="code-curl">Copy cURL</button>
+    </div>
+    <div id="tab-fetch" class="tab-content" style="display:none;">
+      <pre><code id="code-fetch"></code></pre>
+      <button type="button" class="copy-snippet-btn" data-target="code-fetch">Copy Fetch Snippet</button>
+    </div>
+    <div id="tab-python" class="tab-content" style="display:none;">
+      <pre><code id="code-python"></code></pre>
+      <button type="button" class="copy-snippet-btn" data-target="code-python">Copy Python Snippet</button>
     </div>
   </div>
 </div>
@@ -671,14 +812,18 @@ export const HTML_PAGE = `<!DOCTYPE html>
 <div id="toast"></div>
 
 <script>
+  // Elements
   const inputUrl = document.getElementById('input-url');
   const fallbackUrl = document.getElementById('fallback-url');
   const detectedPlatform = document.getElementById('detected-platform');
+  const filenameInput = document.getElementById('filename');
+  const btnModeDownload = document.getElementById('btn-mode-download');
+  const btnModeInline = document.getElementById('btn-mode-inline');
+  const deliveryDesc = document.getElementById('delivery-desc');
+
   const refererMode = document.getElementById('referer-mode');
   const customReferer = document.getElementById('custom-referer');
   const customHeaders = document.getElementById('custom-headers');
-  const dispositionMode = document.getElementById('disposition-mode');
-  const filename = document.getElementById('filename');
   const mimeOverride = document.getElementById('mime-override');
   const compressMode = document.getElementById('compress-mode');
   const replaceFrom = document.getElementById('replace-from');
@@ -697,12 +842,13 @@ export const HTML_PAGE = `<!DOCTYPE html>
   const imgRotate = document.getElementById('img-rotate');
   const imgEngine = document.getElementById('img-engine');
 
-  const outputCard = document.getElementById('output-card');
   const outputUrl = document.getElementById('output-url');
   const codeCurl = document.getElementById('code-curl');
   const codeFetch = document.getElementById('code-fetch');
   const codePython = document.getElementById('code-python');
   const toast = document.getElementById('toast');
+
+  let activeDeliveryMode = 'attachment'; // 'attachment' or 'inline'
 
   function showToast(msg) {
     toast.textContent = msg;
@@ -710,41 +856,42 @@ export const HTML_PAGE = `<!DOCTYPE html>
     setTimeout(() => toast.classList.remove('show'), 2000);
   }
 
+  // Delivery Mode Toggle
+  btnModeDownload.addEventListener('click', () => {
+    activeDeliveryMode = 'attachment';
+    btnModeDownload.className = 'segmented-btn active download-active';
+    btnModeInline.className = 'segmented-btn';
+    deliveryDesc.textContent = 'Forces Content-Disposition: attachment for downloads.';
+    updateLiveProxy();
+  });
+
+  btnModeInline.addEventListener('click', () => {
+    activeDeliveryMode = 'inline';
+    btnModeInline.className = 'segmented-btn active inline-active';
+    btnModeDownload.className = 'segmented-btn';
+    deliveryDesc.textContent = 'Sets Content-Disposition: inline to render natively in browser.';
+    updateLiveProxy();
+  });
+
   // Toggle custom referer input
   refererMode.addEventListener('change', () => {
     customReferer.disabled = refererMode.value !== 'custom';
+    updateLiveProxy();
   });
 
-  // Detect platform on typing
-  inputUrl.addEventListener('input', () => {
-    const val = inputUrl.value.trim().toLowerCase();
-    let platform = null;
-    if (val.includes('drive.google.com') || val.includes('docs.google.com')) platform = 'Google Drive';
-    else if (val.includes('dropbox.com')) platform = 'Dropbox Direct';
-    else if (val.includes('box.com')) platform = 'Box Direct';
-    else if (val.includes('1drv.ms') || val.includes('onedrive.live.com') || val.includes('sharepoint.com')) platform = 'OneDrive / SharePoint';
-    else if (val.includes('github.com')) platform = 'GitHub Unwrapper';
-    else if (val.includes('gitlab.com')) platform = 'GitLab Unwrapper';
+  // Platform Detection
+  function detectPlatform(val) {
+    const v = (val || '').toLowerCase();
+    if (v.includes('drive.google.com') || v.includes('docs.google.com')) return 'Google Drive';
+    if (v.includes('dropbox.com')) return 'Dropbox Direct';
+    if (v.includes('box.com')) return 'Box Direct';
+    if (v.includes('1drv.ms') || v.includes('onedrive.live.com') || v.includes('sharepoint.com')) return 'OneDrive / SharePoint';
+    if (v.includes('github.com')) return 'GitHub Unwrapper';
+    if (v.includes('gitlab.com')) return 'GitLab Unwrapper';
+    return null;
+  }
 
-    if (platform) {
-      detectedPlatform.textContent = platform;
-      detectedPlatform.style.display = 'inline-block';
-    } else {
-      detectedPlatform.style.display = 'none';
-    }
-  });
-
-  document.getElementById('paste-btn').addEventListener('click', async () => {
-    try {
-      inputUrl.value = await navigator.clipboard.readText();
-      inputUrl.dispatchEvent(new Event('input'));
-      showToast('Pasted source URL');
-    } catch {
-      showToast('Clipboard access denied');
-    }
-  });
-
-  // Client-side HMAC Signing using Web Crypto
+  // Web Crypto HMAC
   async function computeHmacSignature(secret, canonicalStr) {
     const enc = new TextEncoder();
     const key = await window.crypto.subtle.importKey(
@@ -758,7 +905,6 @@ export const HTML_PAGE = `<!DOCTYPE html>
     return Array.from(new Uint8Array(signature)).map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
-  // Canonical query string builder
   function buildCanonicalQuery(urlObj) {
     const params = new URLSearchParams(urlObj.search);
     params.delete('sig');
@@ -771,26 +917,45 @@ export const HTML_PAGE = `<!DOCTYPE html>
     return \`\${urlObj.pathname}?\${cleanParams.toString()}\`;
   }
 
-  async function generateProxiedUrl() {
-    const url = inputUrl.value.trim();
-    if (!url) {
-      showToast('Please enter a source URL');
-      return null;
+  // REAL-TIME LINK BUILDER
+  let debounceTimer = null;
+  async function updateLiveProxy() {
+    const rawUrl = inputUrl.value.trim();
+
+    // Update platform badge
+    const platform = detectPlatform(rawUrl);
+    if (platform) {
+      detectedPlatform.textContent = platform;
+      detectedPlatform.style.display = 'inline-block';
+    } else {
+      detectedPlatform.style.display = 'none';
+    }
+
+    if (!rawUrl) {
+      outputUrl.value = '';
+      updateCodeSnippets('');
+      return;
     }
 
     const proxied = new URL('/proxy', window.location.origin);
-    proxied.searchParams.set('url', url);
+    proxied.searchParams.set('url', rawUrl);
 
-    if (fallbackUrl.value.trim()) proxied.searchParams.set('fallback', fallbackUrl.value.trim());
-    if (filename.value.trim()) proxied.searchParams.set('filename', filename.value.trim());
-
-    if (dispositionMode.value === 'inline') {
+    if (activeDeliveryMode === 'inline') {
       proxied.searchParams.set('disposition', 'inline');
-    } else {
-      proxied.searchParams.set('disposition', 'attachment');
     }
 
-    if (mimeOverride.value.trim()) proxied.searchParams.set('type', mimeOverride.value.trim());
+    if (filenameInput.value.trim()) {
+      proxied.searchParams.set('filename', filenameInput.value.trim());
+    }
+
+    // Advanced options
+    if (fallbackUrl.value.trim()) {
+      proxied.searchParams.set('fallback', fallbackUrl.value.trim());
+    }
+
+    if (mimeOverride.value.trim()) {
+      proxied.searchParams.set('type', mimeOverride.value.trim());
+    }
 
     if (refererMode.value === 'strip') {
       proxied.searchParams.set('referer', 'strip');
@@ -803,21 +968,28 @@ export const HTML_PAGE = `<!DOCTYPE html>
         JSON.parse(customHeaders.value.trim());
         proxied.searchParams.set('headers', customHeaders.value.trim());
       } catch {
-        showToast('Invalid JSON in custom headers');
-        return null;
+        // do not break on invalid intermediate JSON while typing
       }
     }
 
-    if (compressMode.value !== 'none') proxied.searchParams.set('compress', compressMode.value);
+    if (compressMode.value !== 'none') {
+      proxied.searchParams.set('compress', compressMode.value);
+    }
+
     if (replaceFrom.value.trim()) {
       proxied.searchParams.set('replace_from', replaceFrom.value.trim());
       proxied.searchParams.set('replace_to', replaceTo.value);
     }
 
-    if (cacheTtl.value !== '86400') proxied.searchParams.set('cache_ttl', cacheTtl.value);
-    if (allowedOrigin.value.trim()) proxied.searchParams.set('allowed_origin', allowedOrigin.value.trim());
+    if (cacheTtl.value !== '86400') {
+      proxied.searchParams.set('cache_ttl', cacheTtl.value);
+    }
 
-    // Image Resizing Options
+    if (allowedOrigin.value.trim()) {
+      proxied.searchParams.set('allowed_origin', allowedOrigin.value.trim());
+    }
+
+    // Image resizing
     if (imgWidth.value.trim()) proxied.searchParams.set('w', imgWidth.value.trim());
     if (imgHeight.value.trim()) proxied.searchParams.set('h', imgHeight.value.trim());
     if (imgWidth.value.trim() || imgHeight.value.trim()) {
@@ -836,16 +1008,29 @@ export const HTML_PAGE = `<!DOCTYPE html>
       const expires = Math.floor(Date.now() / 1000) + parseInt(expirySec, 10);
       proxied.searchParams.set('expires', expires.toString());
       if (secret) {
-        const canonical = buildCanonicalQuery(proxied);
-        const sig = await computeHmacSignature(secret, canonical);
-        proxied.searchParams.set('sig', sig);
+        try {
+          const canonical = buildCanonicalQuery(proxied);
+          const sig = await computeHmacSignature(secret, canonical);
+          proxied.searchParams.set('sig', sig);
+        } catch (e) {
+          console.warn('HMAC signing:', e);
+        }
       }
     }
 
-    return proxied.toString();
+    const finalUrl = proxied.toString();
+    outputUrl.value = finalUrl;
+    updateCodeSnippets(finalUrl);
   }
 
   function updateCodeSnippets(finalUrl) {
+    if (!finalUrl) {
+      codeCurl.textContent = 'curl -L -s -O -J "<proxied-url-will-appear-here>"';
+      codeFetch.textContent = '// Enter a URL above to view code snippet';
+      codePython.textContent = '# Enter a URL above to view code snippet';
+      return;
+    }
+
     codeCurl.textContent = \`curl -L -s -O -J "\${finalUrl}"\`;
     codeFetch.textContent = \`// JavaScript fetch
 const response = await fetch("\${finalUrl}");
@@ -854,9 +1039,9 @@ if (!response.ok) throw new Error(\\\`HTTP \\\${response.status}: \\\${response.
 // For files / downloads:
 const blob = await response.blob();
 const downloadUrl = URL.createObjectURL(blob);
-// e.g. window.open(downloadUrl) or attach to <a download>
+// e.g. window.open(downloadUrl) or <a href="\${downloadUrl}" download>
 
-// Or for JSON / Text APIs:
+// Or for JSON APIs:
 // const data = await response.json();\`;
 
     codePython.textContent = \`# Python requests streaming download
@@ -869,31 +1054,51 @@ with requests.get(url, stream=True) as response:
     with open(filename, "wb") as f:
         for chunk in response.iter_content(chunk_size=65536):
             f.write(chunk)
-print(f"Saved: {filename}")\`;
+print(f"Downloaded: {filename}")\`;
   }
 
-  document.getElementById('generate-btn').addEventListener('click', async () => {
-    const finalUrl = await generateProxiedUrl();
-    if (!finalUrl) return;
+  // Real-time Event Listeners across ALL inputs & selects
+  const allInputs = [
+    inputUrl, fallbackUrl, filenameInput,
+    refererMode, customReferer, customHeaders,
+    mimeOverride, compressMode, replaceFrom, replaceTo,
+    cacheTtl, allowedOrigin, hmacExpiry, hmacSecret,
+    imgWidth, imgHeight, imgFit, imgFormat, imgQuality, imgBlur, imgRotate, imgEngine
+  ];
 
-    outputUrl.value = finalUrl;
-    updateCodeSnippets(finalUrl);
-    outputCard.style.display = 'block';
-    outputCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    showToast('Proxied URL generated');
+  allInputs.forEach(el => {
+    if (!el) return;
+    el.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(updateLiveProxy, 30);
+    });
+    el.addEventListener('change', updateLiveProxy);
   });
 
+  // Paste Button
+  document.getElementById('paste-btn').addEventListener('click', async () => {
+    try {
+      inputUrl.value = await navigator.clipboard.readText();
+      updateLiveProxy();
+      showToast('Pasted URL from clipboard');
+    } catch {
+      showToast('Clipboard access denied');
+    }
+  });
+
+  // Copy Link Button
   document.getElementById('copy-link-btn').addEventListener('click', async () => {
-    if (!outputUrl.value) return;
+    if (!outputUrl.value) return showToast('Enter a URL first');
     await navigator.clipboard.writeText(outputUrl.value);
     showToast('Link copied to clipboard!');
   });
 
+  // Open in Tab Button
   document.getElementById('open-link-btn').addEventListener('click', () => {
     if (outputUrl.value) window.open(outputUrl.value, '_blank');
   });
 
-  // Tabs
+  // Snippet Tabs
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -903,16 +1108,16 @@ print(f"Saved: {filename}")\`;
     });
   });
 
-  // Copy Snippet buttons
+  // Copy Snippet Buttons
   document.querySelectorAll('.copy-snippet-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
       const code = document.getElementById(btn.dataset.target).textContent;
       await navigator.clipboard.writeText(code);
-      showToast('Code snippet copied!');
+      showToast('Snippet copied!');
     });
   });
 
-  // Helper formatting size
+  // Format Helper
   function formatBytes(bytes) {
     if (!bytes || isNaN(bytes)) return 'Unknown';
     const num = parseInt(bytes, 10);
@@ -937,8 +1142,8 @@ print(f"Saved: {filename}")\`;
   });
 
   document.getElementById('inspect-btn').addEventListener('click', async () => {
-    const finalUrl = await generateProxiedUrl();
-    if (!finalUrl) return;
+    const finalUrl = outputUrl.value.trim();
+    if (!finalUrl) return showToast('Enter a URL first');
 
     inspectorModal.classList.add('active');
     inspectStatusBadge.textContent = 'FETCHING HEAD...';
@@ -971,7 +1176,6 @@ print(f"Saved: {filename}")\`;
       const cacheStatus = res.headers.get('x-cache-status') || 'BYPASS';
       inspectCache.textContent = cacheStatus;
 
-      // Populate headers table
       headersTableBody.innerHTML = '';
       const headerEntries = Array.from(res.headers.entries()).sort(([a], [b]) => a.localeCompare(b));
       for (const [k, v] of headerEntries) {
@@ -985,6 +1189,9 @@ print(f"Saved: {filename}")\`;
       headersTableBody.innerHTML = \`<tr><td colspan="2" style="color:var(--red);">Inspection error: \${err.message}</td></tr>\`;
     }
   });
+
+  // Initialize on load
+  updateLiveProxy();
 </script>
 </body>
 </html>`;
